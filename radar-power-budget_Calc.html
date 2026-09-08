@@ -1,0 +1,468 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Radar far-field power budget</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#16191d; --ink2:#5c656e; --ink3:#8d959c;
+  --ground:#e8ecee; --panel:#ffffff; --panel2:#f3f6f7;
+  --rule:#ccd4d8; --rule2:#e2e8ea;
+  --signal:#8f5000; --signal-bg:#fdf2e2;
+  --ok:#1a6552; --ok-bg:#e6f2ee;
+  --warn:#93321a; --warn-bg:#fceeea;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  --cond:"IBM Plex Sans Condensed","IBM Plex Sans",system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --ink:#e7ebed; --ink2:#98a2aa; --ink3:#6d777f;
+    --ground:#15181b; --panel:#1d2226; --panel2:#232a2f;
+    --rule:#333c42; --rule2:#2a3237;
+    --signal:#e0a55a; --signal-bg:#2c2216;
+    --ok:#6fc4a8; --ok-bg:#16261f;
+    --warn:#e08a6d; --warn-bg:#2a1a15;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:28px 20px 64px}
+
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:20px}
+h1{font-family:var(--cond);font-weight:600;font-size:26px;letter-spacing:-0.01em;margin:0;text-transform:uppercase}
+.sub{font-family:var(--mono);font-size:12px;color:var(--ink2);letter-spacing:0.04em;margin-top:2px}
+.eq{font-family:var(--mono);font-size:12px;color:var(--ink2);background:var(--panel);border:1px solid var(--rule2);border-radius:2px;padding:7px 10px;max-width:100%;overflow-x:auto;white-space:nowrap}
+
+.panel{background:var(--panel);border:1px solid var(--rule);border-radius:3px;padding:18px 20px;margin-bottom:14px}
+.panel h2{font-family:var(--cond);text-transform:uppercase;letter-spacing:0.06em;font-size:13px;font-weight:600;color:var(--ink2);margin:0 0 14px;padding-bottom:8px;border-bottom:1px solid var(--rule2)}
+
+.modes{display:flex;gap:0;margin-bottom:16px;border:1px solid var(--rule);border-radius:3px;overflow:hidden;width:fit-content;max-width:100%}
+.modes button{font-family:var(--sans);font-size:13px;padding:8px 16px;border:0;background:var(--panel);color:var(--ink2);cursor:pointer;border-right:1px solid var(--rule)}
+.modes button:last-child{border-right:0}
+.modes button[aria-pressed="true"]{background:var(--ink);color:var(--panel);font-weight:500}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px 18px}
+.f{display:flex;flex-direction:column}
+.f label{font-size:12px;color:var(--ink2);letter-spacing:0.02em;margin-bottom:5px;display:flex;justify-content:space-between;gap:8px}
+.f label .u{font-family:var(--mono);color:var(--ink3)}
+input[type=number],input[type=text]{font-family:var(--mono);font-size:15px;padding:8px 10px;border:1px solid var(--rule);border-radius:2px;background:var(--panel2);color:var(--ink);width:100%}
+input:focus{outline:2px solid var(--signal);outline-offset:-1px;background:var(--panel)}
+input.bad{border-color:var(--warn);background:var(--warn-bg)}
+.hint{font-size:11.5px;color:var(--ink3);margin-top:4px;line-height:1.35}
+.err{font-size:12.5px;color:var(--warn);margin-top:10px;min-height:1px}
+
+.res{display:grid;grid-template-columns:1.4fr 1fr;gap:14px;align-items:stretch}
+@media(max-width:720px){.res{grid-template-columns:1fr}}
+.hero{background:var(--panel);border:1px solid var(--rule);border-left:3px solid var(--signal);border-radius:3px;padding:18px 20px}
+.hero .k{font-family:var(--cond);text-transform:uppercase;letter-spacing:0.06em;font-size:12px;color:var(--ink2)}
+.hero .v{font-family:var(--mono);font-size:40px;font-weight:500;letter-spacing:-0.02em;line-height:1.1;margin:4px 0 2px;color:var(--signal)}
+.hero .v2{font-family:var(--mono);font-size:15px;color:var(--ink)}
+.hero .v3{font-family:var(--mono);font-size:12.5px;color:var(--ink2);margin-top:10px;padding-top:10px;border-top:1px solid var(--rule2)}
+
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:400px){.stats{grid-template-columns:1fr}}
+.stat{background:var(--panel);border:1px solid var(--rule);border-radius:3px;padding:11px 13px}
+.stat .k{font-size:11.5px;color:var(--ink2);letter-spacing:0.02em}
+.stat .v{font-family:var(--mono);font-size:19px;font-weight:500;margin-top:1px}
+.stat .s{font-family:var(--mono);font-size:11.5px;color:var(--ink3)}
+
+.flag{border-radius:3px;padding:9px 13px;font-size:13px;margin-top:12px;display:flex;gap:9px;align-items:flex-start;font-family:var(--mono);line-height:1.45}
+.flag.ok{background:var(--ok-bg);color:var(--ok)}
+.flag.warn{background:var(--warn-bg);color:var(--warn)}
+
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{font-family:var(--cond);text-transform:uppercase;letter-spacing:0.05em;font-size:11.5px;color:var(--ink2);text-align:left;font-weight:600;padding:0 8px 7px 0;border-bottom:1px solid var(--rule)}
+th.n,td.n{text-align:right;font-family:var(--mono)}
+td{padding:6px 8px 6px 0;border-bottom:1px solid var(--rule2)}
+tr:last-child td{border-bottom:0}
+td.loss{color:var(--warn)}
+td.gain{color:var(--ok)}
+tfoot td{font-weight:600;border-top:1px solid var(--rule);border-bottom:0;padding-top:9px}
+
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+button.a{font-family:var(--sans);font-size:13px;font-weight:500;padding:8px 14px;border:1px solid var(--rule);background:var(--panel2);color:var(--ink);border-radius:2px;cursor:pointer}
+button.a:hover{background:var(--panel);border-color:var(--ink2)}
+button.a:active{transform:translateY(1px)}
+button.a.primary{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+button.a.primary:hover{opacity:.88}
+button.a:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+
+.logempty{font-size:13px;color:var(--ink3);font-family:var(--mono);padding:6px 0}
+.logwrap{overflow-x:auto}
+.logwrap table{min-width:820px}
+.rm{background:none;border:0;color:var(--ink3);cursor:pointer;font-family:var(--mono);font-size:14px;padding:0 4px}
+.rm:hover{color:var(--warn)}
+textarea.fallback{width:100%;height:130px;font-family:var(--mono);font-size:12px;margin-top:10px;border:1px solid var(--rule);border-radius:2px;padding:8px;background:var(--panel2);color:var(--ink)}
+.toast{font-family:var(--mono);font-size:12px;color:var(--ok);margin-left:4px;align-self:center}
+svg{display:block;width:100%;height:auto}
+.foot{font-size:12px;color:var(--ink3);line-height:1.6;margin-top:20px}
+.foot code{font-family:var(--mono);color:var(--ink2)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+<header>
+  <div>
+    <h1>Radar far-field power budget</h1>
+    <div class="sub">Transmit power from a measured level at a calibrated test set</div>
+  </div>
+  <div class="eq">P<sub>tx</sub> = P<sub>meas</sub> + L<sub>tx</sub> &minus; G<sub>radar</sub> + FSPL &minus; G<sub>test</sub> + L<sub>test</sub></div>
+</header>
+
+<div class="panel">
+  <div class="modes" role="group" aria-label="Calculation direction">
+    <button id="mTx" aria-pressed="true">Solve for transmit power</button>
+    <button id="mRx" aria-pressed="false">Predict level at test set</button>
+  </div>
+
+  <div class="grid">
+    <div class="f">
+      <label for="known"><span id="knownLbl">Measured level at test set</span><span class="u">dBm</span></label>
+      <input type="number" id="known" value="-42.5" step="0.1">
+      <div class="hint" id="knownHint">Peak, as reported by the test set.</div>
+    </div>
+    <div class="f">
+      <label for="freq">Frequency<span class="u">MHz</span></label>
+      <input type="number" id="freq" value="1030" step="1" min="1">
+    </div>
+    <div class="f">
+      <label for="rng">Range to test set<span class="u">NM</span></label>
+      <input type="number" id="rng" value="1.0" step="0.01" min="0">
+      <div class="hint" id="rngHint">&mdash;</div>
+    </div>
+    <div class="f">
+      <label for="ltx">Transmit cable loss<span class="u">dB</span></label>
+      <input type="number" id="ltx" value="2.8" step="0.1">
+      <div class="hint">Transmitter output to antenna feed, including couplers.</div>
+    </div>
+    <div class="f">
+      <label for="gtx">Radar antenna gain<span class="u">dBi</span></label>
+      <input type="number" id="gtx" value="18" step="0.1">
+    </div>
+    <div class="f">
+      <label for="grx">Test antenna gain<span class="u">dBi</span></label>
+      <input type="number" id="grx" value="8" step="0.1">
+    </div>
+    <div class="f">
+      <label for="lrx">Test cable loss<span class="u">dB</span></label>
+      <input type="number" id="lrx" value="0" step="0.1">
+      <div class="hint">Include any in-line attenuators. Leave at 0 when the test set already corrects for its own losses. Enter the figure only if it does not.</div>
+    </div>
+    <div class="f">
+      <label for="dia">Radar antenna width<span class="u">m</span></label>
+      <input type="number" id="dia" value="0" step="0.1" min="0">
+      <div class="hint">Optional &mdash; drives the 2D&sup2;/&lambda; far-field check. 0 to skip.</div>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Average power (optional)</h2>
+  <div class="modes" role="group" aria-label="Duty cycle source" style="margin-bottom:14px">
+    <button id="dPwr" aria-pressed="true">From pulse width &amp; PRF</button>
+    <button id="dDut" aria-pressed="false">Enter duty cycle</button>
+  </div>
+  <div class="grid">
+    <div class="f" id="wPw">
+      <label for="pw">Pulse width<span class="u">&micro;s</span></label>
+      <input type="number" id="pw" value="0.8" step="0.01" min="0">
+    </div>
+    <div class="f" id="wPrf">
+      <label for="prf">PRF<span class="u">Hz</span></label>
+      <input type="number" id="prf" value="125" step="1" min="0">
+    </div>
+    <div class="f" id="wDuty" style="display:none">
+      <label for="duty">Duty cycle<span class="u">%</span></label>
+      <input type="number" id="duty" value="0.1" step="0.0001" min="0" max="100">
+    </div>
+    <div class="f">
+      <label>Resulting duty cycle<span class="u">%</span></label>
+      <input type="text" id="dutyOut" value="&mdash;" readonly tabindex="-1" style="color:var(--ink2)">
+      <div class="hint">Peak stays the primary figure; average is derived from this.</div>
+    </div>
+  </div>
+  <div class="err" id="err" role="status"></div>
+</div>
+
+<div class="res">
+  <div class="hero">
+    <div class="k" id="heroK">Peak transmit power</div>
+    <div class="v" id="heroV">&mdash;</div>
+    <div class="v2" id="heroV2">&mdash;</div>
+    <div class="v3" id="heroV3">&mdash;</div>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="k">Free space path loss</div><div class="v" id="sFspl">&mdash;</div><div class="s" id="sFsplB">&mdash;</div></div>
+    <div class="stat"><div class="k">Peak EIRP</div><div class="v" id="sEirp">&mdash;</div><div class="s" id="sEirpB">&mdash;</div></div>
+    <div class="stat"><div class="k">Level at test set</div><div class="v" id="sRx">&mdash;</div><div class="s" id="sRxB">&mdash;</div></div>
+    <div class="stat"><div class="k">Peak power density</div><div class="v" id="sPd">&mdash;</div><div class="s" id="sPdB">&mdash;</div></div>
+  </div>
+</div>
+<div id="ff"></div>
+
+<div class="panel" style="margin-top:14px">
+  <h2>Signal path</h2>
+  <div id="chart"></div>
+  <table style="margin-top:16px">
+    <thead><tr><th style="width:52%">Stage</th><th class="n">Change</th><th class="n">Level</th></tr></thead>
+    <tbody id="chain"></tbody>
+  </table>
+</div>
+
+<div class="panel">
+  <h2>Recorded measurements</h2>
+  <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr))">
+    <div class="f"><label for="tag">Reference<span class="u">optional</span></label><input type="text" id="tag" placeholder="Tail no. / Ship / run"></div>
+  </div>
+  <div class="btns">
+    <button class="a primary" id="bAdd">Record this result</button>
+    <button class="a" id="bCopyOne">Copy this result</button>
+    <button class="a" id="bCopyLog">Copy log for spreadsheet</button>
+    <button class="a" id="bCsv">Download CSV</button>
+    <button class="a" id="bClear">Clear log</button>
+    <span class="toast" id="toast"></span>
+  </div>
+  <div id="logHost" style="margin-top:14px"><div class="logempty">No measurements recorded yet.</div></div>
+  <div id="fbHost"></div>
+</div>
+
+<p class="foot">
+FSPL uses <code>20&middot;log&#8321;&#8320;(R<sub>NM</sub>) + 20&middot;log&#8321;&#8320;(f<sub>MHz</sub>) + 37.80</code>, where 37.80 dB is the standard 32.44 dB kilometre constant plus 20&middot;log&#8321;&#8320;(1.852) for nautical miles.
+Average power is <code>P<sub>peak</sub> + 10&middot;log&#8321;&#8320;(duty)</code>. Far-field boundary is <code>2D&sup2;/&lambda;</code>; inside it the path loss term does not hold.
+Polarisation, mismatch and ground-reflection terms are deliberately excluded.
+</p>
+</div>
+
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+var NUM=["known","freq","rng","ltx","gtx","grx","lrx","dia","pw","prf","duty"];
+var mode="tx", dutyMode="pwr", log=[];
+
+function v(i){return parseFloat($(i).value)}
+function fmtW(dbm){
+  var p=Math.pow(10,(dbm-30)/10);
+  if(!isFinite(p))return "\u2014";
+  if(p>=1e6)return (p/1e6).toFixed(3)+" MW";
+  if(p>=1e3)return (p/1e3).toFixed(3)+" kW";
+  if(p>=1)return p.toFixed(3)+" W";
+  if(p>=1e-3)return (p*1e3).toFixed(3)+" mW";
+  if(p>=1e-6)return (p*1e6).toFixed(3)+" \u00b5W";
+  if(p>=1e-9)return (p*1e9).toFixed(3)+" nW";
+  return p.toExponential(3)+" W";
+}
+function toast(m){var t=$("toast");t.textContent=m;setTimeout(function(){if(t.textContent===m)t.textContent=""},2600)}
+
+function dutyFrac(){
+  if(dutyMode==="pwr"){
+    var pw=v("pw"),prf=v("prf");
+    if(!isFinite(pw)||!isFinite(prf)||pw<=0||prf<=0)return null;
+    var d=pw*1e-6*prf;
+    return (d>0&&d<1)?d:null;
+  }
+  var q=v("duty");
+  return (isFinite(q)&&q>0&&q<100)?q/100:null;
+}
+
+var S=null;
+function calc(){
+  var bad=[],req=["known","freq","rng","ltx","gtx","grx","lrx","dia"];
+  req.forEach(function(i){
+    var ok=$(i).value!==""&&isFinite(v(i));
+    if(i==="freq"&&(!ok||v(i)<=0))ok=false;
+    if(i==="rng"&&(!ok||v(i)<=0))ok=false;
+    if(i==="dia"&&(!ok||v(i)<0))ok=false;
+    $(i).classList.toggle("bad",!ok);
+    if(!ok)bad.push(i);
+  });
+  var e=$("err");
+  if(bad.length){
+    e.textContent="Check the highlighted fields. Frequency and range must be greater than zero.";
+    S=null;return;
+  }
+  e.textContent="";
+
+  var f=v("freq"),R=v("rng"),Ltx=v("ltx"),Gtx=v("gtx"),Grx=v("grx"),Lrx=v("lrx"),D=v("dia"),k=v("known");
+  var Rm=R*1852;
+  var fspl=20*Math.log10(R)+20*Math.log10(f)+37.7997;
+  var net=-Ltx+Gtx-fspl+Grx-Lrx;
+  var Ptx,Prx;
+  if(mode==="tx"){Prx=k;Ptx=k-net}else{Ptx=k;Prx=k+net}
+  var eirp=Ptx-Ltx+Gtx;
+  var pd=eirp-10*Math.log10(4*Math.PI*Rm*Rm);
+  var d=dutyFrac(), avg=(d!==null)?Ptx+10*Math.log10(d):null;
+  var lam=299.792458/f, ffm=(D>0)?2*D*D/lam:null;
+
+  S={f:f,R:R,Rm:Rm,Ltx:Ltx,Gtx:Gtx,Grx:Grx,Lrx:Lrx,fspl:fspl,Ptx:Ptx,Prx:Prx,eirp:eirp,pd:pd,duty:d,avg:avg,ff:ffm,lam:lam};
+
+  $("rngHint").textContent=Math.round(Rm).toLocaleString()+" m  \u00b7  "+Math.round(Rm*3.28084).toLocaleString()+" ft";
+  $("dutyOut").value=(d!==null)?(d*100).toPrecision(4)+" %":"\u2014";
+
+  var heroIsTx=(mode==="tx");
+  $("heroK").textContent=heroIsTx?"Peak transmit power":"Peak level at test set";
+  var hv=heroIsTx?Ptx:Prx;
+  $("heroV").textContent=hv.toFixed(2)+" dBm";
+  $("heroV2").textContent=fmtW(hv)+"   \u00b7   "+(hv-30).toFixed(2)+" dBW";
+  $("heroV3").textContent=(avg!==null)
+    ? "Average at "+(d*100).toPrecision(4)+"% duty:  "+(heroIsTx?avg:(avg+net)).toFixed(2)+" dBm  \u00b7  "+fmtW(heroIsTx?avg:(avg+net))
+    : "Average power \u2014 enter pulse width and PRF above.";
+
+  $("sFspl").textContent=fspl.toFixed(2)+" dB";
+  $("sFsplB").textContent=R.toFixed(3)+" NM @ "+f.toFixed(0)+" MHz";
+  $("sEirp").textContent=eirp.toFixed(2)+" dBm";
+  $("sEirpB").textContent=fmtW(eirp);
+  $("sRx").textContent=Prx.toFixed(2)+" dBm";
+  $("sRxB").textContent=fmtW(Prx);
+  $("sPd").textContent=pd.toFixed(2)+" dBm/m\u00b2";
+  $("sPdB").textContent=(Math.pow(10,(pd-30)/10)*1e3).toPrecision(3)+" mW/m\u00b2";
+
+  var ff=$("ff");
+  if(ffm!==null){
+    var ok=Rm>=ffm;
+    ff.innerHTML='<div class="flag '+(ok?"ok":"warn")+'"><span>'+(ok?"\u2713":"!")+'</span><span>Far-field boundary 2D\u00b2/\u03bb = '+ffm.toFixed(1)+' m ('+(ffm/1852).toFixed(4)+' NM) at \u03bb = '+(lam*100).toFixed(2)+' cm. Test range '+Math.round(Rm).toLocaleString()+' m is '+(ok?"in the far field \u2014 the path loss term is valid.":"inside the near field \u2014 the path loss term does not apply. Increase separation to at least "+Math.ceil(ffm)+" m.")+'</span></div>';
+  } else ff.innerHTML="";
+
+  drawChain(); drawChart();
+}
+
+function drawChain(){
+  if(!S)return;
+  var r=[
+    ["Transmitter output (peak)",null,S.Ptx],
+    ["Transmit cable loss",-S.Ltx,S.Ptx-S.Ltx],
+    ["Radar antenna gain",S.Gtx,S.eirp],
+    ["Free space path loss",-S.fspl,S.eirp-S.fspl],
+    ["Test antenna gain",S.Grx,S.eirp-S.fspl+S.Grx],
+    ["Test cable loss",-S.Lrx,S.Prx]
+  ];
+  var h="";
+  r.forEach(function(x,i){
+    var c=x[1]===null?"":(x[1]<0?"loss":"gain");
+    var ch=x[1]===null?"\u2014":(x[1]>0?"+":"\u2212")+Math.abs(x[1]).toFixed(2)+" dB";
+    h+='<tr><td>'+x[0]+'</td><td class="n '+c+'">'+ch+'</td><td class="n">'+x[2].toFixed(2)+' dBm</td></tr>';
+  });
+  h+='<tr><td style="font-weight:600;border-top:1px solid var(--rule)">Level at test set</td><td class="n" style="border-top:1px solid var(--rule)"></td><td class="n" style="font-weight:600;border-top:1px solid var(--rule)">'+S.Prx.toFixed(2)+' dBm</td></tr>';
+  $("chain").innerHTML=h;
+}
+
+function drawChart(){
+  if(!S)return;
+  var lv=[S.Ptx,S.Ptx-S.Ltx,S.eirp,S.eirp-S.fspl,S.eirp-S.fspl+S.Grx,S.Prx];
+  var lab=["TX out","Cable","Antenna","Path","Test ant","Test cbl"];
+  var W=680,H=250,L=54,Rr=14,T=22,B=30;
+  var mx=Math.max.apply(null,lv),mn=Math.min.apply(null,lv);
+  var pad=Math.max((mx-mn)*0.12,3); mx+=pad; mn-=pad;
+  var x=function(i){return L+i*(W-L-Rr)/(lv.length-1)};
+  var y=function(d){return T+(mx-d)*(H-T-B)/(mx-mn)};
+  var s='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Signal level at each stage of the path">';
+  for(var g=0;g<=4;g++){
+    var gv=mx-(mx-mn)*g/4, gy=y(gv);
+    s+='<line x1="'+L+'" y1="'+gy.toFixed(1)+'" x2="'+(W-Rr)+'" y2="'+gy.toFixed(1)+'" stroke="var(--rule2)" stroke-width="1"/>';
+    s+='<text x="'+(L-8)+'" y="'+(gy+4).toFixed(1)+'" text-anchor="end" font-family="var(--mono)" font-size="10.5" fill="var(--ink3)">'+gv.toFixed(0)+'</text>';
+  }
+  var d="";
+  for(var i=0;i<lv.length;i++){
+    d+=(i?" L":"M")+x(i).toFixed(1)+" "+y(lv[i]).toFixed(1);
+  }
+  s+='<path d="'+d+'" fill="none" stroke="var(--signal)" stroke-width="2" stroke-linejoin="round"/>';
+  for(i=0;i<lv.length;i++){
+    var down=(i>0&&lv[i]<lv[i-1]);
+    s+='<circle cx="'+x(i).toFixed(1)+'" cy="'+y(lv[i]).toFixed(1)+'" r="3.5" fill="var(--panel)" stroke="var(--signal)" stroke-width="2"/>';
+    s+='<text x="'+x(i).toFixed(1)+'" y="'+(y(lv[i])+(down?16:-10)).toFixed(1)+'" text-anchor="middle" font-family="var(--mono)" font-size="10.5" fill="var(--ink)">'+lv[i].toFixed(1)+'</text>';
+    s+='<text x="'+x(i).toFixed(1)+'" y="'+(H-9)+'" text-anchor="middle" font-family="var(--sans)" font-size="11" fill="var(--ink2)">'+lab[i]+'</text>';
+  }
+  s+='<text x="'+(L-8)+'" y="13" text-anchor="end" font-family="var(--mono)" font-size="10" fill="var(--ink3)">dBm</text>';
+  s+='</svg>';
+  $("chart").innerHTML=s;
+}
+
+var COLS=["Reference","Timestamp","Freq MHz","Range NM","TX cable dB","Radar gain dBi","Test gain dBi","Test cable dB","FSPL dB","Level at test set dBm","Peak Ptx dBm","Peak Ptx W","Peak EIRP dBm","Duty %","Avg Ptx dBm","Avg Ptx W"];
+function rowOf(tag){
+  var d=S.duty;
+  return [tag||"",new Date().toISOString().slice(0,19).replace("T"," "),S.f,S.R,S.Ltx,S.Gtx,S.Grx,S.Lrx,
+    S.fspl.toFixed(2),S.Prx.toFixed(2),S.Ptx.toFixed(2),Math.pow(10,(S.Ptx-30)/10).toPrecision(6),S.eirp.toFixed(2),
+    d!==null?(d*100).toPrecision(4):"",S.avg!==null?S.avg.toFixed(2):"",S.avg!==null?Math.pow(10,(S.avg-30)/10).toPrecision(6):""];
+}
+function renderLog(){
+  if(!log.length){$("logHost").innerHTML='<div class="logempty">No measurements recorded yet.</div>';return}
+  var h='<div class="logwrap"><table><thead><tr>';
+  COLS.forEach(function(c,i){h+='<th class="'+(i>1?"n":"")+'">'+c+'</th>'});
+  h+='<th></th></tr></thead><tbody>';
+  log.forEach(function(r,ri){
+    h+='<tr>';
+    r.forEach(function(c,i){h+='<td class="'+(i>1?"n":"")+'">'+(c===""?"\u2014":c)+'</td>'});
+    h+='<td class="n"><button class="rm" data-i="'+ri+'" aria-label="Remove row '+(ri+1)+'">\u00d7</button></td></tr>';
+  });
+  h+='</tbody></table></div>';
+  $("logHost").innerHTML=h;
+  Array.prototype.forEach.call($("logHost").querySelectorAll(".rm"),function(b){
+    b.addEventListener("click",function(){log.splice(+b.dataset.i,1);renderLog()});
+  });
+}
+function tsv(rows){return rows.map(function(r){return r.join("\t")}).join("\n")}
+function csv(rows){return rows.map(function(r){return r.map(function(c){c=String(c);return /[",\n]/.test(c)?'"'+c.replace(/"/g,'""')+'"':c}).join(",")}).join("\n")}
+
+function copy(text,msg){
+  var done=function(){toast(msg);$("fbHost").innerHTML=""};
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done,function(){manual(text)});
+  } else manual(text);
+}
+function manual(text){
+  $("fbHost").innerHTML='<div class="hint" style="margin-top:12px">Clipboard is blocked here. Select the text below and copy it, or open the downloaded file directly in a browser.</div><textarea class="fallback" readonly></textarea>';
+  var t=$("fbHost").querySelector("textarea");t.value=text;t.focus();t.select();
+}
+
+$("bAdd").addEventListener("click",function(){
+  if(!S){toast("Fix the inputs first");return}
+  log.push(rowOf($("tag").value.trim()));renderLog();toast("Recorded");
+});
+$("bCopyOne").addEventListener("click",function(){
+  if(!S){toast("Fix the inputs first");return}
+  copy(tsv([COLS,rowOf($("tag").value.trim())]),"Result copied");
+});
+$("bCopyLog").addEventListener("click",function(){
+  if(!log.length){toast("Log is empty");return}
+  copy(tsv([COLS].concat(log)),"Log copied");
+});
+$("bCsv").addEventListener("click",function(){
+  var rows=log.length?log:(S?[rowOf($("tag").value.trim())]:null);
+  if(!rows){toast("Nothing to export");return}
+  var text=csv([COLS].concat(rows));
+  try{
+    var b=new Blob([text],{type:"text/csv;charset=utf-8"});
+    var u=URL.createObjectURL(b),a=document.createElement("a");
+    a.href=u;a.download="radar-power-budget-"+new Date().toISOString().slice(0,10)+".csv";
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setTimeout(function(){URL.revokeObjectURL(u)},1500);
+    toast("CSV downloaded");
+  }catch(err){manual(text)}
+});
+$("bClear").addEventListener("click",function(){log=[];renderLog();toast("Log cleared")});
+
+function setMode(m){
+  mode=m;
+  $("mTx").setAttribute("aria-pressed",m==="tx");
+  $("mRx").setAttribute("aria-pressed",m==="rx");
+  $("knownLbl").textContent=m==="tx"?"Measured level at test set":"Transmitter output (peak)";
+  $("knownHint").textContent=m==="tx"?"Peak, as reported by the test set.":"Peak power at the transmitter output port.";
+  $("known").value=m==="tx"?"-42.5":"60";
+  calc();
+}
+function setDuty(d){
+  dutyMode=d;
+  $("dPwr").setAttribute("aria-pressed",d==="pwr");
+  $("dDut").setAttribute("aria-pressed",d==="duty");
+  $("wPw").style.display=d==="pwr"?"":"none";
+  $("wPrf").style.display=d==="pwr"?"":"none";
+  $("wDuty").style.display=d==="duty"?"":"none";
+  calc();
+}
+$("mTx").addEventListener("click",function(){setMode("tx")});
+$("mRx").addEventListener("click",function(){setMode("rx")});
+$("dPwr").addEventListener("click",function(){setDuty("pwr")});
+$("dDut").addEventListener("click",function(){setDuty("duty")});
+NUM.forEach(function(i){$(i).addEventListener("input",calc)});
+setDuty("pwr");setMode("tx");renderLog();
+})();
+</script>
