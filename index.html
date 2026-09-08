@@ -1,10 +1,1456 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Smouch's GitHub Website</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>IFF far-field · GPS converter &amp; range calculator</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0e1216">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="IFF Range">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<style>
+:root{
+  --bg:#0e1216;
+  --panel:#1a2027;
+  --panel-2:#20272f;
+  --readout:#0b0e11;
+  --border:#2b333c;
+  --amber:#ffc233;      /* RASS / test site, and all primary readouts */
+  --ice:#5ecfe0;        /* ship / platform under test */
+  --text:#e2e8ee;
+  --bright:#ffffff;
+  --dim:#a8b6c2;
+  --danger:#ff7a6e;
+  --mono:ui-monospace,"Cascadia Mono",Consolas,"DejaVu Sans Mono",monospace;
+  --ui:system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--bg);color:var(--text);font-family:var(--ui);font-size:15px;
+  line-height:1.45;padding:24px 16px 64px;
+}
+.wrap{max-width:1180px;margin:0 auto}
+
+/* ---------- masthead ---------- */
+header{border-bottom:1px solid var(--border);padding-bottom:14px;margin-bottom:20px}
+.eyebrow{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--dim);font-family:var(--mono)}
+h1{font-size:22px;font-weight:600;color:var(--bright);margin:4px 0 4px;letter-spacing:-.01em}
+header p{margin:0;color:var(--dim);font-size:13.5px;max-width:70ch}
+
+/* ---------- position panels ---------- */
+.positions{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.pos{background:var(--panel);border:1px solid var(--border);border-top:2px solid var(--accent);padding:16px 18px 18px}
+.pos.ship{--accent:var(--ice)}
+.pos.rass{--accent:var(--amber)}
+.pos-head{display:flex;align-items:baseline;gap:10px;margin-bottom:2px}
+.pos-tag{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent)}
+.pos-name{font-size:16px;font-weight:600;color:var(--bright)}
+input.pos-name{
+  background:transparent;border:0;border-bottom:1px dashed var(--border);
+  font-family:var(--ui);font-size:16px;font-weight:600;color:var(--bright);
+  padding:1px 2px;width:15ch;border-radius:0;
+}
+input.pos-name:hover{border-bottom-color:var(--ice)}
+input.pos-name:focus{outline:none;border-bottom:1px solid var(--ice);box-shadow:none}
+.pos-sub{color:var(--dim);font-size:12.5px;margin:0 0 14px}
+
+fieldset{border:0;margin:0;padding:0}
+.axis + .axis{margin-top:14px;padding-top:14px;border-top:1px dashed var(--border)}
+legend,.axis-label{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);padding:0;margin-bottom:7px;display:block}
+
+.dms{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:7px;align-items:end}
+.cell label{display:block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-bottom:3px;font-family:var(--mono)}
+input[type=text]{
+  width:100%;background:var(--panel-2);border:1px solid var(--border);color:var(--bright);
+  font-family:var(--mono);font-size:15px;padding:7px 8px;border-radius:2px;
+}
+input[type=text]:focus{outline:none;border-color:var(--accent,var(--amber));box-shadow:0 0 0 1px var(--accent,var(--amber))}
+input::selection{background:var(--amber);color:var(--readout)}
+input.bad{border-color:var(--danger);box-shadow:0 0 0 1px var(--danger)}
+
+.hemi{display:flex;border:1px solid var(--border);border-radius:2px;overflow:hidden;height:35px}
+.hemi button{
+  background:var(--panel-2);border:0;color:var(--dim);font-family:var(--mono);font-size:13px;
+  width:34px;cursor:pointer;transition:background .12s,color .12s;
+}
+.hemi button[aria-pressed=true]{background:var(--accent);color:var(--readout);font-weight:700}
+.hemi button:focus-visible{outline:2px solid var(--bright);outline-offset:-2px}
+
+.dec-row{display:grid;grid-template-columns:1fr auto;gap:7px;align-items:end;margin-top:9px}
+.dec-row .cell label{color:var(--accent)}
+
+/* keep the position header on one line */
+.pos-head{flex-wrap:nowrap}
+.pos-tag{white-space:nowrap;flex:0 0 auto}
+input.pos-name{width:auto;flex:1 1 auto;min-width:0}
+
+/* ---------- GPS ---------- */
+.gps-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px}
+.gps-row .btn{flex:0 0 auto}
+.gps-note{font-family:var(--mono);font-size:11.5px;color:var(--dim);line-height:1.5}
+.gps-note.good{color:var(--amber)}
+.gps-note.bad{color:var(--danger)}
+
+/* ---------- results ---------- */
+.results{display:grid;grid-template-columns:1fr 340px;gap:16px;margin-top:16px}
+.card{background:var(--panel);border:1px solid var(--border);padding:16px 18px 18px}
+.card > h2{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim);font-weight:400;margin:0 0 12px}
+
+.readouts{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ro{background:var(--readout);border:1px solid var(--border);padding:10px 12px}
+.ro .k{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+.ro .v{font-family:var(--mono);font-size:27px;font-weight:700;color:var(--amber);line-height:1.15;margin-top:3px;word-break:break-all}
+.ro .v .u{font-size:14px;font-weight:400;color:var(--dim);margin-left:4px}
+.ro .n{font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:4px}
+.ro.wide{grid-column:1/-1}
+.ro.err .v{color:var(--danger);font-size:16px;font-weight:400}
+
+.heading-row{display:grid;grid-template-columns:auto 120px auto;gap:10px;align-items:center;margin-top:14px;
+  padding-top:14px;border-top:1px dashed var(--border)}
+.heading-row .axis-label{margin:0}
+.side{font-family:var(--mono);font-size:12px;color:var(--dim)}
+.side b{font-weight:700}
+.side.green b{color:#4ddb8c}
+.side.red b{color:#ff6b6b}
+
+/* ---------- rose ---------- */
+.rose-card{display:flex;flex-direction:column}
+svg.rose{width:100%;height:auto;display:block}
+.rose .ring{fill:none;stroke:var(--border)}
+.rose .ring.inner{stroke-dasharray:1 5}
+.rose .tick{stroke:var(--border);stroke-width:1}
+.rose .tick.major{stroke-width:1.5}
+.rose text{font-family:var(--mono)}
+.rose .card-pt{font-size:12px;fill:var(--dim)}
+.rose .card-pt.north{fill:var(--text)}
+.rose .hdg{stroke:var(--ice);stroke-width:2}
+.rose .hull{fill:var(--ice);fill-opacity:.22;stroke:var(--ice);stroke-width:1.6}
+.rose .los{stroke:var(--amber);stroke-width:2;stroke-dasharray:7 4}
+.rose .los-dot{fill:var(--amber)}
+.rose .los-label{font-size:11px;fill:var(--amber)}
+.rose .arc{fill:none;stroke:var(--dim);stroke-width:1.5;stroke-dasharray:3 3}
+.rose .arc-label{font-size:12px;fill:var(--text)}
+.rose .hub{fill:var(--text)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-family:var(--mono);font-size:11px;color:var(--dim);margin-top:10px}
+.legend i{display:inline-block;width:16px;height:0;border-top:2px solid;vertical-align:middle;margin-right:5px}
+
+/* ---------- plotting export ---------- */
+.plot-card{margin-top:16px}
+.plot-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.plot-set{display:grid;grid-template-columns:auto 1fr 1fr;gap:8px;align-items:center}
+.plot-set .role{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
+.plot-set.ship{--accent:var(--ice)}
+.plot-set.rass{--accent:var(--amber)}
+select{
+  width:100%;background:var(--panel-2);border:1px solid var(--border);color:var(--bright);
+  font-family:var(--mono);font-size:14px;padding:7px 8px;border-radius:2px;
+}
+select:focus{outline:none;border-color:var(--accent,var(--amber));box-shadow:0 0 0 1px var(--accent,var(--amber))}
+pre.preview{
+  background:var(--readout);border:1px solid var(--border);margin:14px 0 0;padding:11px 12px;
+  font-family:var(--mono);font-size:13.5px;color:var(--amber);white-space:pre-wrap;word-break:break-all;
+  line-height:1.7;
+}
+.btn.link::after{content:" \2197";color:var(--dim)}
+.hint{font-family:var(--mono);font-size:11px;color:var(--dim);margin:9px 0 0}
+
+#image-panel{margin-top:12px}
+#image-out{width:100%;border:1px solid var(--border);display:block;margin-top:8px}
+
+/* ---------- restricted-viewer fallback ---------- */
+.notice{
+  background:#241d0e;border:1px solid #6b5320;color:var(--amber);
+  font-family:var(--mono);font-size:12px;padding:9px 12px;margin:0 0 16px;line-height:1.6;
+}
+#json-panel{margin-top:14px}
+textarea#json-text{
+  width:100%;height:200px;background:var(--readout);border:1px solid var(--border);
+  color:var(--amber);font-family:var(--mono);font-size:12.5px;line-height:1.55;
+  padding:10px 12px;border-radius:2px;resize:vertical;white-space:pre;
+}
+textarea#json-text:focus{outline:none;border-color:var(--amber);box-shadow:0 0 0 1px var(--amber)}
+.url{font-family:var(--mono);font-size:12px;color:var(--amber);user-select:all;
+  background:var(--readout);border:1px solid var(--border);padding:3px 7px}
+
+/* ---------- footer bar ---------- */
+.bar{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.btn{background:var(--panel-2);border:1px solid var(--border);color:var(--text);font-family:var(--ui);
+  font-size:13px;padding:8px 14px;border-radius:2px;cursor:pointer}
+.btn:hover{border-color:var(--amber);color:var(--amber)}
+.btn:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+footer{margin-top:22px;padding-top:14px;border-top:1px solid var(--border);
+  color:var(--dim);font-size:12px;font-family:var(--mono);line-height:1.7}
+footer b{color:var(--text);font-weight:400}
+
+@media (max-width:900px){
+  .positions,.results,.plot-grid{grid-template-columns:1fr}
+}
+
+/* ---------- phone / tablet: bigger targets, no zoom-on-focus ---------- */
+@media (pointer:coarse), (max-width:700px){
+  body{padding:16px 12px calc(48px + env(safe-area-inset-bottom));font-size:16px}
+  h1{font-size:20px}
+  /* 16px is the threshold below which iOS Safari zooms the page on focus */
+  input[type=text],select{font-size:17px;padding:12px 10px;min-height:48px}
+  .hemi{height:48px}
+  .hemi button{width:48px;font-size:16px}
+  .dms{grid-template-columns:1fr 1fr 1fr auto;gap:6px}
+  .cell label{font-size:11px}
+  .btn{font-size:16px;padding:13px 16px;min-height:48px;flex:1 1 auto}
+  .bar{gap:8px}
+  .ro .v{font-size:30px}
+  .heading-row{grid-template-columns:1fr;gap:6px}
+  .heading-row .axis-label{margin-bottom:2px}
+  textarea#json-text{height:240px;font-size:13px}
+  .pos{padding:14px}
+  .card{padding:14px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
 </head>
 <body>
-    <h1>Hello World!</h1>
-    <p>Welcome to my brand new GitHub-hosted website.</p>
+<div class="wrap">
+
+<p class="notice" id="notice" hidden></p>
+
+<header>
+  <div class="eyebrow">IFF / Radar · far-field ground evaluation</div>
+  <h1>GPS converter &amp; range calculator</h1>
+  <p>Enter each position in degrees-minutes-seconds or decimal degrees — the other form fills in as you
+     type. Range, true bearing and bearing relative to ship's head update live.</p>
+</header>
+
+<div class="positions">
+  <section class="pos ship" id="panel-ship">
+    <div class="pos-head">
+      <span class="pos-tag">Position 1</span>
+      <input type="text" class="pos-name" id="ship-name" value="Ship" aria-label="Ship name, used in the export">
+    </div>
+    <p class="pos-sub">Platform under test — the name here is carried into the export.</p>
+    <div class="axis" data-axis="ship-lat"></div>
+    <div class="axis" data-axis="ship-lon"></div>
+  </section>
+
+  <section class="pos rass" id="panel-rass">
+    <div class="pos-head"><span class="pos-tag">Position 2</span><span class="pos-name">Test Site</span></div>
+    <p class="pos-sub">Far-field ground station / test equipment location.</p>
+    <div class="gps-row">
+      <button class="btn" id="gps-btn" type="button">Use phone GPS</button>
+      <span class="gps-note" id="gps-note"></span>
+    </div>
+    <div class="axis" data-axis="rass-lat"></div>
+    <div class="axis" data-axis="rass-lon"></div>
+  </section>
+</div>
+
+<div class="results">
+  <section class="card">
+    <h2>Range &amp; bearing · ship → test site</h2>
+    <div class="readouts">
+      <div class="ro"><div class="k">Distance</div><div class="v" id="km">—<span class="u">km</span></div><div class="n" id="km-note"></div></div>
+      <div class="ro"><div class="k">Distance</div><div class="v" id="nm">—<span class="u">nm</span></div><div class="n" id="nm-note"></div></div>
+      <div class="ro"><div class="k">True bearing ship → test site</div><div class="v" id="brg">—<span class="u">°T</span></div><div class="n" id="brg-note"></div></div>
+      <div class="ro"><div class="k">Relative bearing from ship's head</div><div class="v" id="rel">—<span class="u">°R</span></div><div class="n" id="rel-note"></div></div>
+    </div>
+
+    <div class="heading-row">
+      <span class="axis-label">Ship's head</span>
+      <input type="text" id="head" inputmode="decimal" value="021.66" aria-label="Ship's head, degrees true">
+      <span class="side" id="side">degrees true</span>
+    </div>
+
+    <div class="heading-row" style="border-top:0;padding-top:0;margin-top:10px">
+      <span class="axis-label">RASS range setting</span>
+      <input type="text" id="rass-range" inputmode="decimal" value="20" aria-label="RASS range setting in nautical miles">
+      <span class="side">nautical miles — goes in the RASS Setting row of the Word table</span>
+    </div>
+
+    <div class="bar">
+      <button class="btn" id="copy">Copy results</button>
+      <button class="btn" id="email">Email results</button>
+      <button class="btn" id="save-image">Save image</button>
+      <button class="btn" id="export-word">Export Word table</button>
+      <button class="btn" id="copy-log">Copy log row</button>
+      <button class="btn" id="swap">Swap positions</button>
+      <button class="btn" id="clear">Clear all</button>
+    </div>
+
+    <div id="image-panel" hidden>
+      <p class="hint">Right-click the image below and choose <b>Copy image</b> or <b>Save image as</b> —
+         downloads are blocked in this viewer.</p>
+      <img id="image-out" alt="Saved screen record">
+    </div>
+  </section>
+
+  <section class="card rose-card">
+    <h2>Bearing rose</h2>
+    <svg class="rose" viewBox="0 0 300 300" id="rose" role="img" aria-label="Compass rose showing ship's head and bearing to the test site"></svg>
+    <div class="legend">
+      <span style="color:var(--ice)"><i style="border-color:var(--ice)"></i>Ship's head</span>
+      <span style="color:var(--amber)"><i style="border-color:var(--amber)"></i>Line of sight to test site</span>
+    </div>
+  </section>
+</div>
+
+<section class="card plot-card">
+  <h2>Plotting co-ordinates</h2>
+  <div class="plot-grid">
+    <div class="plot-set ship">
+      <span class="role">Ship</span>
+      <select id="ship-colour" aria-label="Ship marker colour"></select>
+      <select id="ship-shape" aria-label="Ship marker shape"></select>
+    </div>
+    <div class="plot-set rass">
+      <span class="role">Test site</span>
+      <select id="rass-colour" aria-label="Test site marker colour"></select>
+      <select id="rass-shape" aria-label="Test site marker shape"></select>
+    </div>
+  </div>
+  <pre class="preview" id="plot-preview">—</pre>
+  <div class="bar">
+    <button class="btn" id="export-plot">Export co-ords</button>
+    <a class="btn link" id="open-plotter" href="https://geojson.io"
+       target="_blank" rel="noopener noreferrer">Open geojson.io</a>
+  </div>
+  <p class="hint" id="plot-hint">Export writes a GeoJSON .txt file to your downloads — both points plus the
+     track between them. Open geojson.io and drag the file onto the map. The site needs an internet
+     connection; everything else here works offline.</p>
+
+  <div id="json-panel" hidden>
+    <textarea id="json-text" readonly spellcheck="false" aria-label="GeoJSON output for copying"></textarea>
+    <div class="bar">
+      <button class="btn" id="copy-json">Copy JSON</button>
+      <span class="hint">Paste into the JSON editor pane on the right-hand side of geojson.io — it plots as
+        you paste. Manual address: <span class="url">https://geojson.io</span></span>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <b>Range &amp; bearing model:</b> spherical earth, R = 6371 km, nm = km ÷ 1.852 — identical to the
+  legacy analysis spreadsheet, so results are directly comparable.<br>
+  <b>WGS-84 check:</b> the small figure under each distance is the Vincenty ellipsoid solution. Divergence
+  is a few metres at short range and grows with distance; use it if your range instrumentation is WGS-84 referenced.<br>
+  <b>Export format:</b> GeoJSON FeatureCollection — a point for each position carrying its name, colour and
+  symbol, plus a LineString between them labelled with the range in nautical miles.<br>
+  <b>Word table:</b> Export writes a .docx holding the Ship Readings table — same grid, borders and
+  Times New Roman as the report template, with the Ship Reading and Differential cells left empty to fill
+  in later. Open it and copy the table straight into your report.<br>
+  <b>Bearings</b> are initial great-circle bearings, true (not magnetic). Relative bearing = true bearing − ship's head, measured clockwise from the bow.
+</footer>
+
+</div>
+
+<script>
+"use strict";
+
+/* ------------------------------------------------------------------ model */
+const R_KM = 6371;          // matches the legacy spreadsheet
+const KM_PER_NM = 1.852;
+const rad = d => d * Math.PI / 180, deg = r => r * 180 / Math.PI;
+
+function dmsToDecimal(d, m, s, sign){
+  return sign * (Math.abs(d) + m / 60 + s / 3600);
+}
+function decimalToDms(dec){
+  const abs = Math.abs(dec);
+  let d = Math.floor(abs);
+  let rem = (abs - d) * 60;
+  let m = Math.floor(rem + 1e-9);
+  let s = Math.max(0, (rem - m) * 60);
+  if (s >= 59.995){ s = 0; m += 1; }            // guard against a displayed 60.00
+  if (m >= 60){ m = 0; d += 1; }
+  return { d, m, s };
+}
+
+/* Spherical law of cosines — the spreadsheet's formula. */
+function sphericalKm(a, b){
+  const p1 = rad(a.lat), p2 = rad(b.lat), dl = rad(b.lon - a.lon);
+  let c = Math.sin(p1) * Math.sin(p2) + Math.cos(p1) * Math.cos(p2) * Math.cos(dl);
+  c = Math.min(1, Math.max(-1, c));
+  return Math.acos(c) * R_KM;
+}
+
+/* Initial great-circle bearing, degrees true. */
+function bearingDeg(a, b){
+  const p1 = rad(a.lat), p2 = rad(b.lat), dl = rad(b.lon - a.lon);
+  const y = Math.sin(dl) * Math.cos(p2);
+  const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
+  return (deg(Math.atan2(y, x)) + 360) % 360;
+}
+
+/* Vincenty inverse on WGS-84, returned in km. null if it will not converge. */
+function vincentyKm(p, q){
+  const a = 6378137, f = 1 / 298.257223563, b = (1 - f) * a;
+  const L = rad(q.lon - p.lon);
+  const U1 = Math.atan((1 - f) * Math.tan(rad(p.lat)));
+  const U2 = Math.atan((1 - f) * Math.tan(rad(q.lat)));
+  const sU1 = Math.sin(U1), cU1 = Math.cos(U1), sU2 = Math.sin(U2), cU2 = Math.cos(U2);
+  let lam = L, lamP, i = 0, sS, cS, sig, sA, c2sm, C;
+  do {
+    const sl = Math.sin(lam), cl = Math.cos(lam);
+    sS = Math.sqrt((cU2 * sl) ** 2 + (cU1 * sU2 - sU1 * cU2 * cl) ** 2);
+    if (sS === 0) return 0;
+    cS = sU1 * sU2 + cU1 * cU2 * cl;
+    sig = Math.atan2(sS, cS);
+    sA = cU1 * cU2 * sl / sS;
+    const c2A = 1 - sA * sA;
+    c2sm = c2A === 0 ? 0 : cS - 2 * sU1 * sU2 / c2A;
+    C = f / 16 * c2A * (4 + f * (4 - 3 * c2A));
+    lamP = lam;
+    lam = L + (1 - C) * f * sA *
+      (sig + C * sS * (c2sm + C * cS * (-1 + 2 * c2sm * c2sm)));
+  } while (Math.abs(lam - lamP) > 1e-12 && ++i < 200);
+  if (i >= 200) return null;
+  const u2 = (1 - sA * sA) * (a * a - b * b) / (b * b);
+  const A = 1 + u2 / 16384 * (4096 + u2 * (-768 + u2 * (320 - 175 * u2)));
+  const B = u2 / 1024 * (256 + u2 * (-128 + u2 * (74 - 47 * u2)));
+  const dS = B * sS * (c2sm + B / 4 * (cS * (-1 + 2 * c2sm * c2sm) -
+    B / 6 * c2sm * (-3 + 4 * sS * sS) * (-3 + 4 * c2sm * c2sm)));
+  return b * A * (sig - dS) / 1000;
+}
+
+/* ---------------------------------------------------------------- fields */
+const AXES = {
+  "ship-lat": { label:"Latitude",  hemis:["N","S"], neg:"S", max:90,  dflt:{ d:33,  m:51, s:46.74, h:"S" } },
+  "ship-lon": { label:"Longitude", hemis:["E","W"], neg:"W", max:180, dflt:{ d:151, m:13, s:29.40, h:"E" } },
+  "rass-lat": { label:"Latitude",  hemis:["N","S"], neg:"S", max:90,  dflt:{ d:33,  m:52,    s:31.80,  h:"S" } },
+  "rass-lon": { label:"Longitude", hemis:["E","W"], neg:"W", max:180, dflt:{ d:151, m:12,    s:30.24, h:"E" } }
+};
+
+const state = {};   // axis id -> { d, m, s, h }
+
+function buildAxis(container, id){
+  const cfg = AXES[id];
+  container.innerHTML = `
+    <span class="axis-label">${cfg.label}</span>
+    <div class="dms">
+      <div class="cell"><label for="${id}-d">Degrees</label><input type="text" id="${id}-d" inputmode="decimal" data-role="dms"></div>
+      <div class="cell"><label for="${id}-m">Minutes</label><input type="text" id="${id}-m" inputmode="decimal" data-role="dms"></div>
+      <div class="cell"><label for="${id}-s">Seconds</label><input type="text" id="${id}-s" inputmode="decimal" data-role="dms"></div>
+      <div class="hemi" role="group" aria-label="${cfg.label} hemisphere">
+        <button type="button" data-h="${cfg.hemis[0]}">${cfg.hemis[0]}</button>
+        <button type="button" data-h="${cfg.hemis[1]}">${cfg.hemis[1]}</button>
+      </div>
+    </div>
+    <div class="dec-row">
+      <div class="cell"><label for="${id}-dec">Decimal degrees</label><input type="text" id="${id}-dec" inputmode="decimal" data-role="dec"></div>
+    </div>`;
+}
+
+const $ = sel => document.querySelector(sel);
+const num = v => {
+  const t = String(v).trim();
+  if (t === "" || t === "-" || t === "." || t === "-.") return 0;   // mid-typing
+  const n = Number(t.replace(/[^0-9.+-]/g, ""));
+  return Number.isFinite(n) ? n : NaN;
+};
+
+function decimalOf(id){
+  const st = state[id];
+  const sign = st.h === AXES[id].neg ? -1 : 1;
+  return dmsToDecimal(st.d, st.m, st.s, sign);
+}
+
+function valid(id){
+  const st = state[id];
+  if (st.blank) return false;
+  const v = decimalOf(id);
+  return Number.isFinite(v) && Math.abs(v) <= AXES[id].max &&
+         st.m >= 0 && st.m < 60 && st.s >= 0 && st.s < 60;
+}
+
+function paintAxis(id, skip){
+  const st = state[id];
+  if (st.blank){
+    ["-d","-m","-s","-dec"].forEach(suf => { $(`#${id}${suf}`).value = ""; $(`#${id}${suf}`).classList.remove("bad"); });
+    $(`#${id}-d`).closest(".axis").querySelectorAll(".hemi button")
+      .forEach(btn => btn.setAttribute("aria-pressed", String(btn.dataset.h === st.h)));
+    return;
+  }
+  if (skip !== "dms"){
+    const dms = decimalToDms(decimalOf(id));
+    $(`#${id}-d`).value = String(dms.d);
+    $(`#${id}-m`).value = String(dms.m);
+    $(`#${id}-s`).value = dms.s.toFixed(2);
+  }
+  if (skip !== "dec"){
+    $(`#${id}-dec`).value = decimalOf(id).toFixed(7);
+  }
+  const group = $(`#${id}-d`).closest(".axis").querySelectorAll(".hemi button");
+  group.forEach(btn => btn.setAttribute("aria-pressed", String(btn.dataset.h === st.h)));
+  const ok = valid(id);
+  ["-d","-m","-s","-dec"].forEach(suf => $(`#${id}${suf}`).classList.toggle("bad", !ok));
+}
+
+function readDms(id){
+  const st = state[id];
+  st.blank = false;
+  st.d = Math.abs(num($(`#${id}-d`).value));
+  st.m = num($(`#${id}-m`).value);
+  st.s = num($(`#${id}-s`).value);
+  // a leading minus in the degrees box flips the hemisphere, for pasted values
+  if (String($(`#${id}-d`).value).trim().startsWith("-")) st.h = AXES[id].neg;
+}
+
+function readDec(id){
+  const v = num($(`#${id}-dec`).value);
+  const st = state[id];
+  st.blank = false;
+  if (!Number.isFinite(v)) { st.d = NaN; return; }
+  st.h = v < 0 ? AXES[id].neg : AXES[id].hemis.find(h => h !== AXES[id].neg);
+  const dms = decimalToDms(v);
+  st.d = dms.d; st.m = dms.m; st.s = dms.s;
+}
+
+/* ---------------------------------------------------------------- render */
+function fmt(n, dp){ return n.toLocaleString(undefined, { minimumFractionDigits:dp, maximumFractionDigits:dp }); }
+
+let last = null;
+
+function render(){
+  const ids = Object.keys(AXES);
+  const allOk = ids.every(valid);
+  const set = (el, v, note) => {
+    const box = $("#" + el);
+    box.firstChild.nodeValue = v;
+    $("#" + el + "-note").textContent = note || "";
+  };
+
+  if (!allOk){
+    last = null;
+    ["km","nm","brg","rel"].forEach(k => set(k, "—", ""));
+    const anyBlank = ids.some(i => state[i].blank);
+    $("#side").textContent = anyBlank ? "enter both positions" : "check the highlighted fields";
+    $("#side").className = "side";
+    drawRose(null, null);
+    renderPlot();
+    return;
+  }
+
+  const ship = { lat: decimalOf("ship-lat"), lon: decimalOf("ship-lon") };
+  const rass = { lat: decimalOf("rass-lat"), lon: decimalOf("rass-lon") };
+
+  const km = sphericalKm(ship, rass);
+  const nm = km / KM_PER_NM;
+  const ell = vincentyKm(ship, rass);
+  const brg = bearingDeg(ship, rass);
+  const rec = bearingDeg(rass, ship);
+
+  set("km", fmt(km, 4), ell === null ? "" : "WGS-84 " + fmt(ell, 4) + " km");
+  set("nm", fmt(nm, 4), ell === null ? "" : "WGS-84 " + fmt(ell / KM_PER_NM, 4) + " nm");
+  set("brg", fmt(brg, 2), "reciprocal test site → ship " + fmt(rec, 2) + "°T");
+  last = { km, nm, ell, brg, rec, head:null, rel:null };
+
+  const hRaw = $("#head").value.trim();
+  const head = num(hRaw);
+  const headOk = hRaw !== "" && Number.isFinite(head);
+  $("#head").classList.toggle("bad", !headOk);
+
+  if (!headOk){
+    set("rel", "—", "enter ship's head to resolve");
+    $("#side").textContent = "degrees true";
+    $("#side").className = "side";
+    drawRose(brg, null);
+    renderPlot();
+    return;
+  }
+
+  const h = ((head % 360) + 360) % 360;
+  const rel = (brg - h + 360) % 360;
+  set("rel", fmt(rel, 2), "ship's head " + fmt(h, 2) + "°T");
+  last.head = h; last.rel = rel;
+
+  const side = $("#side");
+  if (rel < 0.005 || Math.abs(rel - 180) < 0.005){
+    side.textContent = rel < 1 ? "dead ahead" : "dead astern";
+    side.className = "side";
+  } else if (rel < 180){
+    side.innerHTML = "starboard · <b>GREEN " + fmt(rel, 1) + "</b>";
+    side.className = "side green";
+  } else {
+    side.innerHTML = "port · <b>RED " + fmt(360 - rel, 1) + "</b>";
+    side.className = "side red";
+  }
+  drawRose(brg, h);
+  renderPlot();
+}
+
+/* -------------------------------------------------------------- plotting */
+const COLOURS = {
+  red:"#ff0000", green:"#00ff00", blue:"#0000ff", yellow:"#ffff00",
+  orange:"#ffa500", purple:"#800080", black:"#000000", white:"#ffffff"
+};
+const SHAPES = ["circle","triangle","square","diamond","marker"];
+const TRACK_COLOUR = "#0000ff";
+const PLOT = {
+  ship: { colour:"red",   shape:"circle"   },
+  rass: { colour:"green", shape:"triangle" }
+};
+const shipName = () => ($("#ship-name").value.trim() || "Ship");
+const SITE_NAME = "Test Site";
+const labelOf = who => who === "ship" ? shipName() : SITE_NAME;
+
+function plotLines(){
+  if (!Object.keys(AXES).every(valid)) return null;
+  return ["ship","rass"].map(who => [
+    decimalOf(who + "-lat").toFixed(7),
+    decimalOf(who + "-lon").toFixed(7),
+    PLOT[who].colour,
+    PLOT[who].shape,
+    labelOf(who)
+  ].join(","));
+}
+
+function renderPlot(){
+  const lines = plotLines();
+  $("#plot-preview").textContent = lines ? lines.join("\n") : "\u2014";
+  ["#export-plot", "#export-word", "#save-image", "#copy-log", "#email"].forEach(sel => {
+    const b = $(sel);
+    b.disabled = !lines;
+    b.style.opacity = lines ? "1" : ".5";
+  });
+}
+
+function coordOf(who){
+  return [ Number(decimalOf(who + "-lon").toFixed(7)),
+           Number(decimalOf(who + "-lat").toFixed(7)) ];
+}
+
+function buildGeoJSON(){
+  if (!Object.keys(AXES).every(valid)) return null;
+  const ship = coordOf("ship"), site = coordOf("rass");
+  const nm = sphericalKm({ lat:decimalOf("ship-lat"), lon:decimalOf("ship-lon") },
+                         { lat:decimalOf("rass-lat"), lon:decimalOf("rass-lon") }) / KM_PER_NM;
+  return {
+    type: "FeatureCollection",
+    features: [
+      {
+        type: "Feature",
+        geometry: { type: "Point", coordinates: ship },
+        properties: {
+          name: shipName(),
+          "marker-color": COLOURS[PLOT.ship.colour],
+          "marker-symbol": PLOT.ship.shape,
+          description: "Origin Point",
+          "stroke-width": "",
+          "marker-size": "medium"
+        }
+      },
+      {
+        type: "Feature",
+        geometry: { type: "Point", coordinates: site },
+        properties: {
+          name: SITE_NAME,
+          "marker-color": COLOURS[PLOT.rass.colour],
+          "marker-symbol": PLOT.rass.shape,
+          description: "Destination Point",
+          "marker-size": "medium"
+        }
+      },
+      {
+        type: "Feature",
+        geometry: { type: "LineString", coordinates: [ship, site] },
+        properties: {
+          name: nm.toFixed(4) + "NM",
+          stroke: TRACK_COLOUR,
+          "stroke-width": 2
+        }
+      }
+    ]
+  };
+}
+
+function safeName(t){
+  return (t.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "Position");
+}
+
+/* True when the page is embedded in a viewer (SharePoint, Teams, an intranet
+   portal). Sandboxed frames silently swallow downloads and new-tab links, so
+   the JSON is shown on screen to be copied instead. */
+const EMBEDDED = (() => { try { return window.self !== window.top; } catch (_) { return true; } })();
+
+function tryDownload(text, file, btn){
+  if (navigator.canShare && btn){
+    deliverFile(new Blob([text], { type:"application/json" }), file, "application/json", btn);
+    return true;
+  }
+  try {
+    const url = URL.createObjectURL(new Blob([text], { type:"application/json" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = file; a.rel = "noopener";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    return true;
+  } catch (_) { return false; }
+}
+
+function exportGeoJSON(btn){
+  const gj = buildGeoJSON();
+  if (!gj) return;
+  const text = JSON.stringify(gj, null, 4);
+  const file = `${safeName(shipName())}_to_${safeName(SITE_NAME)}.txt`;
+
+  $("#json-text").value = text;
+  $("#json-panel").hidden = false;
+
+  const saved = EMBEDDED ? false : tryDownload(text, file, btn);
+  const old = btn.dataset.label || btn.textContent;
+  btn.dataset.label = old;
+  btn.textContent = saved ? "Saved " + file : "JSON ready below";
+  setTimeout(() => { btn.textContent = old; }, 2400);
+  if (!saved) $("#json-text").focus({ preventScroll:false });
+}
+
+async function copyText(text, btn, done){
+  try { await navigator.clipboard.writeText(text); }
+  catch (_) {
+    const ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    document.execCommand("copy"); ta.remove();
+  }
+  const old = btn.textContent;
+  btn.textContent = done || "Copied";
+  setTimeout(() => { btn.textContent = old; }, 1200);
+}
+
+/* ============================================== Word table export (.docx)
+
+   A .docx is a ZIP of XML parts. Everything below is built in the browser with
+   no libraries, so it works offline. The table matches the report template:
+   same six-column grid and widths, same borders, Times New Roman, 10 pt cells,
+   bold headers, and the same cells left empty to be filled in later. */
+
+const GRID = [1668, 1701, 1417, 2899, 39, 1562];
+const FULL = GRID.reduce((a, b) => a + b, 0);          // 9286 dxa
+
+const xesc = t => String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+function wRpr(bold, sz, hl, sup, font){
+  let p = "<w:rPr>";
+  if (font) p += `<w:rFonts w:ascii="${font}" w:hAnsi="${font}" w:cs="${font}"/>`;
+  if (bold) p += "<w:b/>";
+  p += '<w:color w:val="auto"/>';
+  if (sz) p += `<w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/>`;
+  if (sup) p += '<w:vertAlign w:val="superscript"/>';
+  if (hl) p += `<w:highlight w:val="${hl}"/>`;
+  return p + "</w:rPr>";
+}
+
+function wRun(text, o = {}){
+  const sz = o.sz === null ? null : (o.sz || 20);
+  return "<w:r>" + wRpr(!!o.bold, sz, null, !!o.sup, o.font) +
+         (o.brk ? "<w:br/>" : "") +
+         `<w:t xml:space="preserve">${xesc(text)}</w:t></w:r>`;
+}
+
+function wCell(width, runs, o = {}){
+  const sz = o.sz === null ? null : (o.sz || 20);
+  let tc = `<w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/>`;
+  if (o.span > 1) tc += `<w:gridSpan w:val="${o.span}"/>`;
+  tc += '<w:shd w:val="clear" w:color="auto" w:fill="auto"/></w:tcPr><w:p><w:pPr>';
+  if (o.centre !== false) tc += '<w:jc w:val="center"/>';
+  tc += wRpr(!!o.bold, sz, o.hl) + "</w:pPr>" + runs.join("") + "</w:p></w:tc>";
+  return tc;
+}
+
+function wText(width, text, o = {}){
+  const sz = o.sz === null ? null : (o.sz || 20);
+  const runs = text === "" ? [] : [wRun(text, { bold:o.bold, sz })];
+  return wCell(width, runs, o);
+}
+
+function wDifferential(){
+  return wCell(2899, [
+    wRun("Differential ", { bold:true }),
+    wRun("(range ", { bold:true, brk:true }),
+    wRun("\u00b1", { bold:true, font:"Arial" }),
+    wRun(" 0.2 NM", { bold:true }),
+    wRun("; Bearing <2 ", { bold:true }),
+    wRun("o", { bold:true, sup:true, font:"Times New Roman Bold" }),
+    wRun(")", { bold:true })
+  ], { bold:true });
+}
+
+function documentXml(d){
+  const banner = t => "<w:tr>" + wText(FULL, t, { span:6, bold:true, sz:null }) + "</w:tr>";
+  const tr = cells => "<w:tr>" + cells.join("") + "</w:tr>";
+
+  const rows = [
+    banner(`${d.shipName} Readings (Combat System)`),
+    tr([wText(1668, "Latitude", { bold:true }), wText(1701, "Longitude", { bold:true }),
+        wText(1417, "Range (NM)", { bold:true }),
+        wText(2899, "Calculated Bearing to Test Target/site (True)", { bold:true }),
+        wText(1601, "Own Ships Head (True) ", { span:2, bold:true })]),
+    tr([wText(1668, d.shipLat), wText(1701, d.shipLon), wText(1417, d.rangeNm),
+        wText(2899, d.bearingTrue), wText(1601, d.shipsHead, { span:2 })]),
+    banner("Test Site Position"),
+    tr([wText(1668, "Latitude", { bold:true }), wText(1701, "Longitude", { bold:true }),
+        wText(1417, "Range (m)", { bold:true }),
+        wText(2938, "Bearing (Rel. to Ships Head) ", { span:2, bold:true }),
+        wText(1562, "", { bold:true, hl:"lightGray" })]),
+    tr([wText(1668, d.siteLat), wText(1701, d.siteLon), wText(1417, d.rangeM),
+        wText(2938, d.bearingRel, { span:2 }),
+        wText(1562, "", { hl:"lightGray", centre:false })]),
+    banner("Range and Bearing Accuracy Calculations \u2013 Generated Target"),
+    tr([wText(1668, "", { centre:false }), wText(1701, "Ship Reading", { bold:true }),
+        wText(1417, "RASS Setting", { bold:true }), wDifferential(),
+        wText(1601, "", { span:2, bold:true, hl:"lightGray", centre:false })]),
+    tr([wText(1668, "Range (NM)", { bold:true, centre:false }), wText(1701, ""),
+        wText(1417, d.rassRange), wText(2899, ""), wText(1601, "", { span:2 })]),
+    tr([wText(1668, "Bearing (True)", { bold:true, centre:false }), wText(1701, ""),
+        wText(1417, d.rassBearing), wText(2899, ""), wText(1601, "", { span:2 })])
+  ];
+
+  const border = ["top","left","bottom","right","insideH","insideV"]
+    .map(e => `<w:${e} w:val="single" w:sz="4" w:space="0" w:color="auto"/>`).join("");
+
+  const tbl = '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/><w:tblBorders>' + border +
+    '</w:tblBorders><w:tblLayout w:type="fixed"/><w:tblLook w:val="01E0" w:firstRow="1" w:lastRow="1"' +
+    ' w:firstColumn="1" w:lastColumn="1" w:noHBand="0" w:noVBand="0"/></w:tblPr><w:tblGrid>' +
+    GRID.map(w => `<w:gridCol w:w="${w}"/>`).join("") + "</w:tblGrid>" + rows.join("") + "</w:tbl>";
+
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+    tbl + "<w:p/>" +
+    '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440"' +
+    ' w:left="1440" w:header="708" w:footer="708" w:gutter="0"/><w:cols w:space="708"/>' +
+    '<w:docGrid w:linePitch="360"/></w:sectPr></w:body></w:document>';
+}
+
+const DOCX_PARTS = {
+  "[Content_Types].xml":
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+    '<Default Extension="xml" ContentType="application/xml"/>' +
+    '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+    '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>',
+  "_rels/.rels":
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>',
+  "word/_rels/document.xml.rels":
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>',
+  "word/styles.xml":
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+    '<w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Times New Roman" w:eastAsia="Times New Roman"' +
+    ' w:hAnsi="Times New Roman" w:cs="Times New Roman"/><w:sz w:val="24"/><w:szCs w:val="24"/>' +
+    '<w:lang w:val="en-AU" w:eastAsia="en-AU"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr>' +
+    '<w:spacing w:before="120" w:after="120" w:line="240" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>' +
+    '<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/>' +
+    '<w:pPr><w:spacing w:before="120" w:after="120" w:line="240" w:lineRule="auto"/></w:pPr>' +
+    '<w:rPr><w:rFonts w:ascii="Times New Roman" w:eastAsia="Times New Roman" w:hAnsi="Times New Roman"' +
+    ' w:cs="Times New Roman"/><w:color w:val="000000"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr></w:style></w:styles>'
+};
+
+/* ---- minimal store-only ZIP writer ---- */
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++){
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+
+function crc32(bytes){
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+function zipStore(files){
+  const enc = new TextEncoder();
+  const parts = [], central = [];
+  let offset = 0;
+
+  const push = (arr, ...vals) => vals.forEach(v => arr.push(v));
+  const u16 = v => [v & 0xFF, (v >>> 8) & 0xFF];
+  const u32 = v => [v & 0xFF, (v >>> 8) & 0xFF, (v >>> 16) & 0xFF, (v >>> 24) & 0xFF];
+
+  files.forEach(f => {
+    const name = enc.encode(f.name), data = enc.encode(f.data), crc = crc32(data);
+    const local = [];
+    push(local, ...u32(0x04034b50), ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0),
+                ...u32(crc), ...u32(data.length), ...u32(data.length),
+                ...u16(name.length), ...u16(0));
+    const head = new Uint8Array(local.length + name.length + data.length);
+    head.set(local, 0); head.set(name, local.length); head.set(data, local.length + name.length);
+    parts.push(head);
+
+    const cd = [];
+    push(cd, ...u32(0x02014b50), ...u16(20), ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0),
+             ...u32(crc), ...u32(data.length), ...u32(data.length),
+             ...u16(name.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(offset));
+    const cdb = new Uint8Array(cd.length + name.length);
+    cdb.set(cd, 0); cdb.set(name, cd.length);
+    central.push(cdb);
+    offset += head.length;
+  });
+
+  const cdSize = central.reduce((a, b) => a + b.length, 0);
+  const end = [];
+  push(end, ...u32(0x06054b50), ...u16(0), ...u16(0), ...u16(files.length), ...u16(files.length),
+            ...u32(cdSize), ...u32(offset), ...u16(0));
+  return new Blob([...parts, ...central, new Uint8Array(end)],
+                  { type:"application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+}
+
+function buildDocx(d){
+  const files = Object.keys(DOCX_PARTS).map(k => ({ name:k, data:DOCX_PARTS[k] }));
+  files.push({ name:"word/document.xml", data:documentXml(d) });
+  return zipStore(files);
+}
+
+
+/* ---- same table as rich HTML, for pasting straight into Word ----
+   Used where a download is blocked (SharePoint viewer): Word converts pasted
+   HTML tables into real Word tables, keeping borders, widths and fonts. */
+function wordTableHtml(d){
+  const px = dxa => Math.round(dxa / 15);
+  const cell = (t, o = {}) =>
+    `<td${o.span ? ` colspan="${o.span}"` : ""}${o.w ? ` width="${px(o.w)}"` : ""} style="border:1px solid #000;`
+    + `padding:3px 5px;font-family:'Times New Roman',serif;font-size:10pt;`
+    + `text-align:${o.left ? "left" : "center"};${o.bold ? "font-weight:bold;" : ""}`
+    + `${o.big ? "font-size:12pt;" : ""}">${t === "" ? "&nbsp;" : xesc(t)}</td>`;
+  const banner = t => `<tr>${cell(t, { span:6, bold:true, big:true })}</tr>`;
+
+  return '<table cellspacing="0" cellpadding="0" style="border-collapse:collapse;border:1px solid #000;">'
+    + banner(`${d.shipName} Readings (Combat System)`)
+    + `<tr>${cell("Latitude", { bold:true, w:1668 })}${cell("Longitude", { bold:true, w:1701 })}`
+    + `${cell("Range (NM)", { bold:true, w:1417 })}`
+    + `${cell("Calculated Bearing to Test Target/site (True)", { bold:true, w:2899 })}`
+    + `${cell("Own Ships Head (True)", { bold:true, w:1601, span:2 })}</tr>`
+    + `<tr>${cell(d.shipLat)}${cell(d.shipLon)}${cell(d.rangeNm)}${cell(d.bearingTrue)}`
+    + `${cell(d.shipsHead, { span:2 })}</tr>`
+    + banner("Test Site Position")
+    + `<tr>${cell("Latitude", { bold:true })}${cell("Longitude", { bold:true })}`
+    + `${cell("Range (m)", { bold:true })}${cell("Bearing (Rel. to Ships Head)", { bold:true, span:2 })}`
+    + `${cell("", { bold:true })}</tr>`
+    + `<tr>${cell(d.siteLat)}${cell(d.siteLon)}${cell(d.rangeM)}${cell(d.bearingRel, { span:2 })}`
+    + `${cell("")}</tr>`
+    + banner("Range and Bearing Accuracy Calculations \u2013 Generated Target")
+    + `<tr>${cell("")}${cell("Ship Reading", { bold:true })}${cell("RASS Setting", { bold:true })}`
+    + `${cell("Differential (range \u00b1 0.2 NM; Bearing <2 \u00ba)", { bold:true })}`
+    + `${cell("", { span:2 })}</tr>`
+    + `<tr>${cell("Range (NM)", { bold:true, left:true })}${cell("")}${cell(d.rassRange)}${cell("")}`
+    + `${cell("", { span:2 })}</tr>`
+    + `<tr>${cell("Bearing (True)", { bold:true, left:true })}${cell("")}${cell(d.rassBearing)}${cell("")}`
+    + `${cell("", { span:2 })}</tr>`
+    + "</table>";
+}
+
+async function copyHtml(html, plain, btn, done){
+  let ok = false;
+  try {
+    await navigator.clipboard.write([new ClipboardItem({
+      "text/html": new Blob([html], { type:"text/html" }),
+      "text/plain": new Blob([plain], { type:"text/plain" })
+    })]);
+    ok = true;
+  } catch (_) {
+    const div = document.createElement("div");
+    div.contentEditable = "true";
+    div.style.cssText = "position:fixed;left:-10000px;top:0;opacity:0";
+    div.innerHTML = html;
+    document.body.appendChild(div);
+    const r = document.createRange();
+    r.selectNodeContents(div);
+    const sel = window.getSelection();
+    sel.removeAllRanges(); sel.addRange(r);
+    try { ok = document.execCommand("copy"); } catch (_e) { ok = false; }
+    sel.removeAllRanges(); div.remove();
+  }
+  const old = btn.textContent;
+  btn.textContent = ok ? (done || "Copied") : "Copy blocked \u2014 use the file";
+  setTimeout(() => { btn.textContent = old; }, 2400);
+}
+
+/* ---- values for the table ---- */
+function dmsText(id){
+  const dec = decimalOf(id), dms = decimalToDms(dec);
+  const hemi = state[id].h;
+  return `${hemi} ${dms.d}\u00ba ${dms.m}\u2019 ${dms.s.toFixed(2)}\u201d`;
+}
+
+function wordValues(){
+  if (!Object.keys(AXES).every(valid) || !last) return null;
+  const deg = v => v.toFixed(2) + " \u00ba";
+  const rass = $("#rass-range").value.trim();
+  return {
+    shipName: shipName(),
+    shipLat: dmsText("ship-lat"), shipLon: dmsText("ship-lon"),
+    rangeNm: last.km / KM_PER_NM ? (last.nm).toFixed(4) + " NM" : "",
+    bearingTrue: deg(last.brg),
+    shipsHead: last.head === null ? "" : deg(last.head),
+    siteLat: dmsText("rass-lat"), siteLon: dmsText("rass-lon"),
+    rangeM: (last.km * 1000).toFixed(0) + " m",
+    bearingRel: last.rel === null ? "" : deg(last.rel),
+    rassRange: rass === "" ? "" : rass + " NM",
+    rassBearing: deg(last.brg)
+  };
+}
+
+function stamp(){
+  const p = n => String(n).padStart(2, "0");
+  const t = new Date();
+  return `${t.getFullYear()}${p(t.getMonth() + 1)}${p(t.getDate())}_${p(t.getHours())}${p(t.getMinutes())}`;
+}
+
+/* ============================================ screen record as an image
+
+   Browsers cannot screenshot themselves, and the usual library for it is a CDN
+   download that will not work offline or under SharePoint's CSP. So the card is
+   redrawn onto a canvas instead: same values, same colours, minus the buttons. */
+
+function drawRecordCard(){
+  const W = 1000, H = 512, S = 2;                 // S = supersample for crisp text
+  const cv = document.createElement("canvas");
+  cv.width = W * S; cv.height = H * S;
+  const g = cv.getContext("2d");
+  g.scale(S, S);
+
+  const css = getComputedStyle(document.documentElement);
+  const col = n => css.getPropertyValue(n).trim();
+  const BG = col("--bg"), PANEL = col("--panel"), RO = col("--readout"), BRD = col("--border");
+  const AM = col("--amber"), ICE = col("--ice"), TX = col("--text"), DIM = col("--dim");
+  const MONO = '13px ui-monospace, Consolas, "DejaVu Sans Mono", monospace';
+
+  g.fillStyle = BG; g.fillRect(0, 0, W, H);
+
+  const text = (t, x, y, o = {}) => {
+    g.fillStyle = o.fill || TX;
+    g.font = o.font || MONO;
+    g.textAlign = o.align || "left";
+    g.fillText(t, x, y);
+  };
+  const panel = (x, y, w, h, fill) => {
+    g.fillStyle = fill || PANEL; g.fillRect(x, y, w, h);
+    g.strokeStyle = BRD; g.lineWidth = 1; g.strokeRect(x + .5, y + .5, w - 1, h - 1);
+  };
+
+  text("IFF / RADAR \u00b7 FAR-FIELD GROUND EVALUATION", 24, 30,
+       { fill: DIM, font: '11px ui-monospace, Consolas, monospace' });
+  text("GPS converter & range calculator", 24, 56,
+       { fill: "#fff", font: '600 20px system-ui, "Segoe UI", sans-serif' });
+  text(new Date().toLocaleString(), W - 24, 30,
+       { fill: DIM, font: '11px ui-monospace, Consolas, monospace', align: "right" });
+
+  // --- the two positions
+  const posBox = (x, label, accent, latId, lonId) => {
+    panel(x, 78, 452, 132);
+    g.fillStyle = accent; g.fillRect(x, 78, 452, 2);
+    text(label.toUpperCase(), x + 14, 102, { fill: accent, font: '11px ui-monospace, Consolas, monospace' });
+    text("LAT   " + dmsText(latId), x + 14, 130, { font: MONO });
+    text("      " + decimalOf(latId).toFixed(7) + "\u00b0", x + 14, 150, { fill: DIM, font: MONO });
+    text("LON   " + dmsText(lonId), x + 14, 176, { font: MONO });
+    text("      " + decimalOf(lonId).toFixed(7) + "\u00b0", x + 14, 196, { fill: DIM, font: MONO });
+  };
+  posBox(24, shipName(), ICE, "ship-lat", "ship-lon");
+  posBox(524, SITE_NAME, AM, "rass-lat", "rass-lon");
+
+  // --- results
+  const cell = (x, y, w, cap, val, unit, note) => {
+    panel(x, y, w, 78, RO);
+    text(cap, x + 12, y + 20, { fill: DIM, font: '10px ui-monospace, Consolas, monospace' });
+    g.fillStyle = AM; g.font = '700 26px ui-monospace, Consolas, monospace';
+    g.textAlign = "left"; g.fillText(val, x + 12, y + 50);
+    const wv = g.measureText(val).width;
+    text(" " + unit, x + 12 + wv + 4, y + 50, { fill: DIM, font: '12px ui-monospace, Consolas, monospace' });
+    if (note) text(note, x + 12, y + 68, { fill: DIM, font: '10px ui-monospace, Consolas, monospace' });
+  };
+  const fm = (n, dp) => n.toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp });
+  cell(24,  226, 220, "DISTANCE", fm(last.km, 4), "km", last.ell === null ? "" : "WGS-84 " + fm(last.ell, 4));
+  cell(256, 226, 220, "DISTANCE", fm(last.nm, 4), "nm", "");
+  cell(24,  316, 220, "TRUE BEARING", fm(last.brg, 2), "\u00b0T", "recip " + fm(last.rec, 2) + "\u00b0T");
+  cell(256, 316, 220, "RELATIVE BEARING", last.rel === null ? "\u2014" : fm(last.rel, 2), "\u00b0R",
+       last.head === null ? "no head entered" : "ship's head " + fm(last.head, 2) + "\u00b0T");
+
+  panel(24, 406, 452, 54);
+  text("RASS RANGE SETTING   " + ($("#rass-range").value.trim() || "\u2014") + " NM",
+       38, 428, { font: MONO });
+  text($("#side").textContent, 38, 448, { fill: DIM, font: MONO });
+
+  // --- rose
+  panel(500, 226, 476, 234);
+  drawCanvasRose(g, 738, 343, 100, last.brg, last.head, { AM, ICE, TX, DIM, BRD });
+
+  text("Spherical earth R = 6371 km \u00b7 nm = km \u00f7 1.852 \u00b7 bearings true, not magnetic \u00b7 "
+       + "matches the legacy analysis spreadsheet",
+       24, H - 22, { fill: DIM, font: '11px ui-monospace, Consolas, monospace' });
+
+  return cv;
+}
+
+function drawCanvasRose(g, cx, cy, R, brg, head, C){
+  const pt = (a, r) => [cx + r * Math.sin(rad(a)), cy - r * Math.cos(rad(a))];
+  g.save();
+  g.strokeStyle = C.BRD; g.lineWidth = 1;
+  g.beginPath(); g.arc(cx, cy, R, 0, Math.PI * 2); g.stroke();
+  for (let a = 0; a < 360; a += 10){
+    const major = a % 30 === 0;
+    const [x1, y1] = pt(a, R), [x2, y2] = pt(a, R - (major ? 9 : 4));
+    g.lineWidth = major ? 1.5 : 1;
+    g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke();
+  }
+  g.font = '11px ui-monospace, Consolas, monospace'; g.textAlign = "center";
+  [["N", 0], ["E", 90], ["S", 180], ["W", 270]].forEach(([t, a]) => {
+    const [x, y] = pt(a, R - 19);
+    g.fillStyle = a === 0 ? C.TX : C.DIM; g.fillText(t, x, y + 4);
+  });
+  if (brg !== null && head !== null){
+    const rel = (brg - head + 360) % 360;
+    g.strokeStyle = C.DIM; g.setLineDash([3, 3]); g.lineWidth = 1.5;
+    g.beginPath(); g.arc(cx, cy, 42, rad(head - 90), rad(brg - 90)); g.stroke();
+    g.setLineDash([]);
+    const [lx, ly] = pt(head + rel / 2, 58);
+    g.fillStyle = C.TX; g.fillText(rel.toFixed(1) + "\u00b0", lx, ly + 4);
+  }
+  if (head !== null){
+    const [hx, hy] = pt(head, R - 4);
+    g.strokeStyle = C.ICE; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(cx, cy); g.lineTo(hx, hy); g.stroke();
+    g.save(); g.translate(cx, cy); g.rotate(rad(head));
+    g.beginPath(); g.moveTo(0, -23); g.bezierCurveTo(7, -11, 8, 7, 5, 21);
+    g.lineTo(-5, 21); g.bezierCurveTo(-8, 7, -7, -11, 0, -23);
+    g.fillStyle = C.ICE; g.globalAlpha = .22; g.fill(); g.globalAlpha = 1; g.stroke(); g.restore();
+  }
+  if (brg !== null){
+    const [bx, by] = pt(brg, R - 4);
+    g.strokeStyle = C.AM; g.lineWidth = 2; g.setLineDash([7, 4]);
+    g.beginPath(); g.moveTo(cx, cy); g.lineTo(bx, by); g.stroke(); g.setLineDash([]);
+    g.fillStyle = C.AM; g.beginPath(); g.arc(bx, by, 4, 0, Math.PI * 2); g.fill();
+    const [lx, ly] = pt(brg, R - 40);
+    const ox = 17 * Math.cos(rad(brg)), oy = 17 * Math.sin(rad(brg));   // clear of the line
+    g.font = '10px ui-monospace, Consolas, monospace'; g.textAlign = "center";
+    g.fillText("TEST SITE", lx + ox, ly + oy + 4);
+  }
+  g.fillStyle = C.TX; g.beginPath(); g.arc(cx, cy, 2.5, 0, Math.PI * 2); g.fill();
+  g.restore();
+}
+
+/* ---- one CSV line per run, for an audit/analysis log ---- */
+function logRow(){
+  if (!last) return null;
+  const q = t => `"${String(t).replace(/"/g, '""')}"`;
+  return [
+    q(new Date().toISOString()), q(shipName()),
+    decimalOf("ship-lat").toFixed(7), decimalOf("ship-lon").toFixed(7),
+    q(dmsText("ship-lat")), q(dmsText("ship-lon")),
+    q(SITE_NAME),
+    decimalOf("rass-lat").toFixed(7), decimalOf("rass-lon").toFixed(7),
+    q(dmsText("rass-lat")), q(dmsText("rass-lon")),
+    last.km.toFixed(4), last.nm.toFixed(4),
+    last.ell === null ? "" : last.ell.toFixed(4),
+    last.brg.toFixed(2), last.rec.toFixed(2),
+    last.head === null ? "" : last.head.toFixed(2),
+    last.rel === null ? "" : last.rel.toFixed(2),
+    ($("#rass-range").value.trim() || "")
+  ].join(",");
+}
+
+const LOG_HEADER = "timestamp_utc,ship,ship_lat,ship_lon,ship_lat_dms,ship_lon_dms,site,site_lat,site_lon," +
+                   "site_lat_dms,site_lon_dms,range_km,range_nm,range_km_wgs84,bearing_true,bearing_recip," +
+                   "ships_head,bearing_rel,rass_range_nm";
+
+/* ------------------------------------------------------------------ rose */
+const C = 150, RR = 116;
+const pt = (a, r) => [C + r * Math.sin(rad(a)), C - r * Math.cos(rad(a))];
+
+function drawRose(brg, head){
+  const p = [];
+  p.push(`<circle class="ring" cx="${C}" cy="${C}" r="${RR}"/>`);
+  p.push(`<circle class="ring inner" cx="${C}" cy="${C}" r="${RR - 20}"/>`);
+
+  for (let a = 0; a < 360; a += 10){
+    const major = a % 30 === 0;
+    const [x1, y1] = pt(a, RR), [x2, y2] = pt(a, RR - (major ? 10 : 5));
+    p.push(`<line class="tick${major ? " major" : ""}" x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"/>`);
+  }
+  [["N", 0], ["E", 90], ["S", 180], ["W", 270]].forEach(([t, a]) => {
+    const [x, y] = pt(a, RR - 22);
+    p.push(`<text class="card-pt${a === 0 ? " north" : ""}" x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="middle">${t}</text>`);
+  });
+
+  if (brg !== null && head !== null){
+    const rel = (brg - head + 360) % 360;
+    const [ax, ay] = pt(head, 48), [bx, by] = pt(brg, 48);
+    p.push(`<path class="arc" d="M ${ax.toFixed(1)} ${ay.toFixed(1)} A 48 48 0 ${rel > 180 ? 1 : 0} 1 ${bx.toFixed(1)} ${by.toFixed(1)}"/>`);
+    const [lx, ly] = pt(head + rel / 2, 64);
+    p.push(`<text class="arc-label" x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}" text-anchor="middle">${rel.toFixed(1)}\u00b0</text>`);
+  }
+
+  if (head !== null){
+    const [hx, hy] = pt(head, RR - 4);
+    p.push(`<line class="hdg" x1="${C}" y1="${C}" x2="${hx.toFixed(1)}" y2="${hy.toFixed(1)}"/>`);
+    p.push(`<g transform="translate(${C} ${C}) rotate(${head.toFixed(2)})">
+              <path class="hull" d="M 0 -26 C 8 -12 9 8 6 24 L -6 24 C -9 8 -8 -12 0 -26 Z"/>
+            </g>`);
+  }
+
+  if (brg !== null){
+    const [bx, by] = pt(brg, RR - 4);
+    p.push(`<line class="los" x1="${C}" y1="${C}" x2="${bx.toFixed(1)}" y2="${by.toFixed(1)}"/>`);
+    p.push(`<circle class="los-dot" cx="${bx.toFixed(1)}" cy="${by.toFixed(1)}" r="4.5"/>`);
+    const [lx, ly] = pt(brg, RR - 36);
+    p.push(`<text class="los-label" x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}" text-anchor="middle">TEST SITE</text>`);
+  }
+
+  p.push(`<circle class="hub" cx="${C}" cy="${C}" r="2.5"/>`);
+  $("#rose").innerHTML = p.join("");
+}
+
+
+/* ================================================== phone GPS and sharing */
+
+/* Files: on iOS a download is awkward, so hand the file to the share sheet
+   when the browser supports it and fall back to a normal download. */
+async function deliverFile(blob, filename, mime, btn, savedLabel){
+  const old = btn.dataset.label || btn.textContent;
+  btn.dataset.label = old;
+  const file = new File([blob], filename, { type: mime });
+  if (navigator.canShare && navigator.canShare({ files: [file] })){
+    try {
+      await navigator.share({ files: [file], title: filename });
+      btn.textContent = "Shared";
+      setTimeout(() => { btn.textContent = old; }, 2000);
+      return true;
+    } catch (err) {
+      if (err && err.name === "AbortError"){ return false; }   // user cancelled
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.rel = "noopener";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  btn.textContent = savedLabel || ("Saved " + filename);
+  setTimeout(() => { btn.textContent = old; }, 2400);
+  return true;
+}
+
+/* ---- results as plain text, shared by the copy and email buttons ---- */
+function resultsText(){
+  const line = id => `${$(`#${id}-d`).value}\u00b0 ${$(`#${id}-m`).value}\u2032 ${$(`#${id}-s`).value}\u2033 `
+                   + `${state[id].h}  (${$(`#${id}-dec`).value})`;
+  const L = last;
+  let t = `${shipName()} lat  ${line("ship-lat")}\n`
+        + `${shipName()} lon  ${line("ship-lon")}\n`
+        + `${SITE_NAME} lat  ${line("rass-lat")}\n`
+        + `${SITE_NAME} lon  ${line("rass-lon")}\n`;
+  if (!L) return t + "Positions incomplete - no solution";
+  t += `Distance   ${fmt(L.km,4)} km   ${fmt(L.nm,4)} nm`
+     + (L.ell === null ? "" : `   (WGS-84 ${fmt(L.ell,4)} km)`) + "\n"
+     + `True brg   ${fmt(L.brg,2)} deg T  ${shipName()} -> ${SITE_NAME}\n`
+     + `Reciprocal ${fmt(L.rec,2)} deg T  ${SITE_NAME} -> ${shipName()}\n`;
+  if (L.rel !== null){
+    t += `Ship head  ${fmt(L.head,2)} deg T\nRelative   ${fmt(L.rel,2)} deg R\n`;
+  }
+  const rass = $("#rass-range").value.trim();
+  if (rass) t += `RASS range setting  ${rass} NM\n`;
+  return t;
+}
+
+function emailResults(btn){
+  if (!last) return;
+  const subject = `${shipName()} \u2013 range & bearing to ${SITE_NAME}`;
+  const body = resultsText() + "\nGenerated " + new Date().toLocaleString()
+             + "\nSpherical earth R = 6371 km; bearings true, not magnetic.";
+  window.location.href = "mailto:?subject=" + encodeURIComponent(subject)
+                       + "&body=" + encodeURIComponent(body);
+  const old = btn.textContent;
+  btn.textContent = "Opening Mail\u2026";
+  setTimeout(() => { btn.textContent = old; }, 2000);
+}
+
+/* ---- take the test site position from the phone's own GPS ---- */
+function setAxisDecimal(id, value){
+  const box = $(`#${id}-dec`);
+  box.value = value.toFixed(7);
+  box.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function useGps(btn){
+  const note = $("#gps-note");
+  const fail = msg => { note.textContent = msg; note.className = "gps-note bad"; };
+
+  if (!window.isSecureContext){
+    fail("Location needs HTTPS. Open this page from a server address, not a local file.");
+    return;
+  }
+  if (!navigator.geolocation){
+    fail("This browser has no location service.");
+    return;
+  }
+
+  const old = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Locating\u2026";
+  note.textContent = "Waiting for a fix\u2026";
+  note.className = "gps-note";
+
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const { latitude, longitude, accuracy } = pos.coords;
+      setAxisDecimal("rass-lat", latitude);
+      setAxisDecimal("rass-lon", longitude);
+      const when = new Date(pos.timestamp).toLocaleTimeString();
+      note.textContent = `Fix at ${when}, \u00b1${Math.round(accuracy)} m`
+                       + (accuracy > 15 ? " \u2014 poor, try again outdoors" : "");
+      note.className = accuracy > 15 ? "gps-note bad" : "gps-note good";
+      btn.disabled = false;
+      btn.textContent = old;
+    },
+    err => {
+      const msg = {
+        1: "Permission denied. Settings \u203a Privacy \u203a Location Services, then allow this site.",
+        2: "Position unavailable \u2014 no signal. Try outdoors.",
+        3: "Timed out waiting for a fix."
+      }[err.code] || ("Location error: " + err.message);
+      fail(msg);
+      btn.disabled = false;
+      btn.textContent = old;
+    },
+    { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }
+  );
+}
+
+/* ------------------------------------------------------------------ wire */
+function init(){
+  document.querySelectorAll(".axis").forEach(el => buildAxis(el, el.dataset.axis));
+
+  Object.keys(AXES).forEach(id => {
+    state[id] = { ...AXES[id].dflt };
+    paintAxis(id);
+
+    ["-d","-m","-s"].forEach(suf => {
+      $(`#${id}${suf}`).addEventListener("input", () => { readDms(id); paintAxis(id, "dms"); render(); });
+      $(`#${id}${suf}`).addEventListener("focus", e => e.target.select());
+    });
+    $(`#${id}-dec`).addEventListener("input", () => { readDec(id); paintAxis(id, "dec"); render(); });
+    $(`#${id}-dec`).addEventListener("focus", e => e.target.select());
+    $(`#${id}-d`).closest(".axis").querySelectorAll(".hemi button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        state[id].h = btn.dataset.h;
+        paintAxis(id, state[id].blank ? "dms" : undefined);
+        render();
+      });
+    });
+  });
+
+  $("#head").addEventListener("input", render);
+  $("#head").addEventListener("focus", e => e.target.select());
+
+  $("#swap").addEventListener("click", () => {
+    [["ship-lat","rass-lat"],["ship-lon","rass-lon"]].forEach(([a, b]) => {
+      const t = state[a]; state[a] = state[b]; state[b] = t;
+    });
+    Object.keys(AXES).forEach(id => paintAxis(id));
+    render();
+  });
+
+  $("#clear").addEventListener("click", () => {
+    Object.keys(AXES).forEach(id => {
+      state[id] = { d:0, m:0, s:0, h:AXES[id].dflt.h, blank:true };
+      paintAxis(id);
+    });
+    $("#head").value = "";
+    render();
+    $("#ship-lat-d").focus();
+  });
+
+  ["ship","rass"].forEach(who => {
+    const fill = (sel, list, current) => {
+      sel.innerHTML = list.map(v => `<option value="${v}"${v === current ? " selected" : ""}>${v}</option>`).join("");
+    };
+    const cSel = $(`#${who}-colour`), sSel = $(`#${who}-shape`);
+    fill(cSel, Object.keys(COLOURS), PLOT[who].colour);
+    fill(sSel, SHAPES,  PLOT[who].shape);
+    cSel.addEventListener("change", () => { PLOT[who].colour = cSel.value; renderPlot(); });
+    sSel.addEventListener("change", () => { PLOT[who].shape  = sSel.value; renderPlot(); });
+  });
+
+  $("#rass-range").addEventListener("focus", e => e.target.select());
+  $("#gps-btn").addEventListener("click", e => useGps(e.target));
+  $("#email").addEventListener("click", e => emailResults(e.target));
+
+  $("#save-image").addEventListener("click", e => {
+    if (!last) return;
+    const cv = drawRecordCard();
+    const file = `${safeName(shipName())}_range_${stamp()}.jpg`;
+    cv.toBlob(blob => {
+      if (!blob) return;
+      if (EMBEDDED){
+        $("#image-out").src = URL.createObjectURL(blob);
+        $("#image-panel").hidden = false;
+        e.target.textContent = "Image ready below";
+      } else {
+        deliverFile(blob, file, "image/jpeg", e.target, "Image saved");
+      }
+    }, "image/jpeg", 0.92);
+  });
+
+  $("#export-word").addEventListener("click", e => {
+    const d = wordValues();
+    if (!d) return;
+    const file = `${safeName(shipName())}_readings_${stamp()}.docx`;
+    if (EMBEDDED){
+      const plain = [d.shipLat, d.shipLon, d.rangeNm, d.bearingTrue, d.shipsHead].join("\t");
+      copyHtml(wordTableHtml(d), plain, e.target, "Table copied \u2014 paste into Word");
+      return;
+    }
+    deliverFile(buildDocx(d), file,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                e.target);
+  });
+
+  $("#copy-log").addEventListener("click", e => {
+    const row = logRow();
+    if (row) copyText(LOG_HEADER + "\n" + row, e.target, "Log row copied");
+  });
+
+  $("#export-plot").addEventListener("click", e => exportGeoJSON(e.target));
+  $("#copy-json").addEventListener("click", e => copyText($("#json-text").value, e.target));
+  $("#json-text").addEventListener("focus", e => e.target.select());
+  $("#json-text").addEventListener("click", e => e.target.select());
+
+  if (EMBEDDED){
+    const n = $("#notice");
+    n.hidden = false;
+    n.textContent = "Embedded viewer detected — file downloads and outbound links are blocked here. " +
+                    "Export co-ords still builds the GeoJSON: copy it from the panel that appears and " +
+                    "paste it into geojson.io. All calculations work normally.";
+    $("#plot-hint").textContent = "Export builds the GeoJSON below ready to copy. Opened from a local drive " +
+                                  "instead, the same button writes the file straight to your downloads.";
+    $("#export-plot").textContent = "Export co-ords";
+  }
+
+  $("#ship-name").addEventListener("input", renderPlot);
+  $("#ship-name").addEventListener("focus", e => e.target.select());
+
+  $("#copy").addEventListener("click", e => { copyText(resultsText(), e.target); });
+
+  render();
+}
+document.addEventListener("DOMContentLoaded", init);
+
+/* Offline support. Registration is optional - the page works without it. */
+if ("serviceWorker" in navigator && window.isSecureContext){
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  });
+}
+</script>
 </body>
 </html>
