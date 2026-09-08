@@ -1,0 +1,1497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>ADS-B Track Analyser</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{
+  --g:#00ff88;--gd:#008844;--gg:#00ff8840;--bg:#050c08;
+  --panel:#07100a;--bdr:#0d2a18;--acc:#00e5ff;--warn:#ffd700;
+  --hot:#ff6b35;--tx:#b8f0d0;--dim:#3d7a55;--dimb:#1a3824;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{font-family:'Rajdhani',sans-serif;background:var(--bg);color:var(--tx);display:flex;flex-direction:column;height:100vh}
+
+/* HEADER */
+#hdr{display:flex;align-items:center;gap:12px;padding:6px 14px;background:#000;border-bottom:1px solid var(--gd);flex-shrink:0;z-index:200}
+.logo{font-family:'Orbitron',monospace;font-size:.95rem;font-weight:900;color:var(--g);text-shadow:0 0 12px var(--g);letter-spacing:3px;white-space:nowrap}
+.logo b{color:var(--acc);text-shadow:0 0 12px var(--acc)}
+#pills{flex:1;display:flex;gap:7px;flex-wrap:wrap}
+.pill{font-family:'Share Tech Mono',monospace;font-size:.65rem;padding:2px 9px;border:1px solid var(--gd);border-radius:2px;color:var(--gd);background:rgba(0,255,136,.03);white-space:nowrap;transition:all .3s}
+.pill.lit{border-color:var(--g);color:var(--g);background:rgba(0,255,136,.08);box-shadow:0 0 6px var(--gg)}
+.hbtn{font-family:'Orbitron',monospace;font-size:.58rem;font-weight:700;letter-spacing:2px;padding:5px 12px;border:1px solid;border-radius:2px;cursor:pointer;transition:all .2s;white-space:nowrap;background:transparent}
+.hbtn.a{border-color:var(--acc);color:var(--acc)}
+.hbtn.a:hover{background:rgba(0,229,255,.14)}
+.hbtn.g{border-color:var(--g);color:var(--g)}
+.hbtn.g:hover{background:rgba(0,255,136,.14)}
+
+/* LAYOUT */
+#body{display:flex;flex:1;overflow:hidden}
+
+/* SIDEBAR */
+#sb{width:290px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--bdr);display:flex;flex-direction:column;overflow:hidden}
+.tabs{display:flex;border-bottom:1px solid var(--bdr)}
+.tab{flex:1;padding:5px 2px;text-align:center;font-family:'Orbitron',monospace;font-size:.5rem;letter-spacing:1px;color:var(--dim);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s}
+.tab.on{color:var(--g);border-bottom-color:var(--g);background:rgba(0,255,136,.03)}
+.pane{display:none;flex:1;overflow:hidden;flex-direction:column}
+.pane.on{display:flex}
+.ptit{font-family:'Orbitron',monospace;font-size:.53rem;letter-spacing:2px;color:var(--dim);padding:7px 12px 4px;border-bottom:1px solid var(--bdr);flex-shrink:0}
+
+/* DATA PANEL */
+.dg{padding:6px 10px;display:flex;flex-direction:column;gap:4px;overflow-y:auto;flex:1}
+.dr{display:flex;justify-content:space-between;align-items:center;padding:3px 6px;border-radius:2px;transition:background .15s}
+.dr:hover{background:rgba(0,255,136,.03)}
+.dl{font-size:.65rem;color:var(--dim);font-weight:600;text-transform:uppercase;letter-spacing:.7px}
+.dv{font-family:'Share Tech Mono',monospace;font-size:.74rem;color:var(--g);text-align:right;text-shadow:0 0 6px rgba(0,255,136,.3)}
+.dv.a{color:var(--acc);text-shadow:0 0 6px rgba(0,229,255,.3)}
+.dv.w{color:var(--warn)}.dv.h{color:var(--hot)}
+.sep{height:1px;background:var(--bdr);margin:3px 0}
+
+/* AIRCRAFT LIST with checkboxes */
+.acl{overflow-y:auto;flex:1}
+.aci{padding:0;border-bottom:1px solid var(--dimb);cursor:pointer;transition:all .15s}
+.aci:hover{background:rgba(0,255,136,.04)}
+.aci.on{background:rgba(0,255,136,.07)}
+.aci-inner{display:flex;align-items:center;gap:8px;padding:7px 12px;border-left:3px solid transparent;transition:border .2s}
+.aci.on .aci-inner{border-left-color:var(--g)}
+/* checkbox toggle */
+.ac-chk{width:14px;height:14px;border:1px solid var(--dim);border-radius:2px;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  transition:all .2s;cursor:pointer}
+.ac-chk.checked{border-color:var(--g);background:rgba(0,255,136,.15)}
+.ac-chk.checked::after{content:'✓';font-size:.55rem;color:var(--g);line-height:1}
+.ac-sym{width:20px;height:20px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.acicao{font-family:'Share Tech Mono',monospace;font-size:.68rem;color:var(--acc);min-width:52px}
+.accall{font-size:.76rem;font-weight:600;color:var(--tx);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acn{font-family:'Share Tech Mono',monospace;font-size:.6rem;color:var(--dim)}
+/* controls row */
+.ac-ctrl{display:flex;gap:6px;padding:6px 12px;border-bottom:1px solid var(--bdr);flex-shrink:0}
+.ac-ctrl-btn{font-family:'Orbitron',monospace;font-size:.52rem;padding:3px 8px;border:1px solid var(--dim);color:var(--dim);background:transparent;cursor:pointer;border-radius:2px;transition:all .15s;flex:1;text-align:center}
+.ac-ctrl-btn:hover{border-color:var(--acc);color:var(--acc)}
+
+/* RAW LOG */
+.log{overflow-y:auto;flex:1;font-family:'Share Tech Mono',monospace;font-size:.6rem}
+.lr{display:flex;gap:4px;padding:2px 10px;border-bottom:1px solid var(--dimb);transition:background .1s;cursor:pointer}
+.lr:hover{background:rgba(0,255,136,.03)}
+.lr.hi{background:rgba(0,255,136,.06)}
+.lts{color:var(--dim);min-width:55px;flex-shrink:0}
+.lic{color:var(--acc);min-width:50px;flex-shrink:0}
+.lty{color:var(--warn);min-width:28px;flex-shrink:0}
+.ld{color:var(--tx);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+
+/* MAP */
+#mwrap{flex:1;position:relative}
+#map{width:100%;height:100%}
+
+/* HUD */
+#hud{position:absolute;top:10px;right:10px;z-index:500;display:flex;flex-direction:column;gap:6px;pointer-events:none}
+.hbox{background:rgba(5,12,8,.9);border:1px solid var(--bdr);padding:6px 10px;min-width:155px;backdrop-filter:blur(4px)}
+.htit{font-family:'Orbitron',monospace;font-size:.49rem;color:var(--dim);letter-spacing:2px;margin-bottom:2px}
+.hval{font-family:'Share Tech Mono',monospace;font-size:.78rem;color:var(--g);text-shadow:0 0 6px rgba(0,255,136,.35)}
+
+/* RAW HEX POPUP - shown on track click */
+#hexPop{position:absolute;z-index:800;background:rgba(5,12,8,.97);
+  border:1px solid var(--g);box-shadow:0 0 20px var(--gg);
+  padding:12px 14px;min-width:320px;max-width:420px;display:none;pointer-events:all}
+#hexPop.vis{display:block}
+.hpop-tit{font-family:'Orbitron',monospace;font-size:.58rem;color:var(--g);letter-spacing:2px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.hpop-close{cursor:pointer;color:var(--dim);font-size:.8rem;padding:0 4px}
+.hpop-close:hover{color:var(--hot)}
+.hpop-row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--dimb)}
+.hpop-label{font-family:'Share Tech Mono',monospace;font-size:.62rem;color:var(--dim)}
+.hpop-val{font-family:'Share Tech Mono',monospace;font-size:.62rem;color:var(--tx);text-align:right}
+.hpop-hex{font-family:'Share Tech Mono',monospace;font-size:.72rem;color:var(--acc);
+  word-break:break-all;padding:6px;background:rgba(0,229,255,.05);border:1px solid var(--dimb);
+  margin-top:6px;cursor:pointer;transition:background .2s}
+.hpop-hex:hover{background:rgba(0,229,255,.12)}
+.hpop-copy{font-size:.58rem;color:var(--dim);text-align:right;margin-top:3px;font-family:'Share Tech Mono',monospace}
+
+/* PLAY BAR */
+#pbar{position:absolute;bottom:0;left:0;right:0;z-index:600;
+  background:rgba(5,12,8,.96);border-top:1px solid var(--bdr);
+  padding:8px 14px 10px;display:none;backdrop-filter:blur(8px)}
+#pbar.vis{display:block}
+.ptop{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+#playbtn{font-family:'Orbitron',monospace;font-size:.65rem;font-weight:700;
+  letter-spacing:2px;padding:5px 16px;border:2px solid var(--g);color:var(--g);
+  background:rgba(0,255,136,.08);cursor:pointer;border-radius:3px;transition:all .2s;min-width:105px;text-align:center}
+#playbtn:hover{background:rgba(0,255,136,.2);box-shadow:0 0 12px var(--gg)}
+#playbtn.going{border-color:var(--warn);color:var(--warn);background:rgba(255,215,0,.08)}
+#resetbtn{font-family:'Orbitron',monospace;font-size:.58rem;padding:4px 9px;
+  border:1px solid var(--dim);color:var(--dim);background:transparent;cursor:pointer;border-radius:2px;transition:all .2s}
+#resetbtn:hover{border-color:var(--acc);color:var(--acc)}
+.speeds{display:flex;gap:3px}
+.spd{font-family:'Share Tech Mono',monospace;font-size:.62rem;padding:3px 7px;
+  border:1px solid var(--bdr);color:var(--dim);background:transparent;cursor:pointer;border-radius:2px;transition:all .15s}
+.spd:hover{border-color:var(--acc);color:var(--acc)}
+.spd.on{border-color:var(--acc);color:var(--acc);background:rgba(0,229,255,.08)}
+#ptime{font-family:'Share Tech Mono',monospace;font-size:.75rem;color:var(--g);text-shadow:0 0 6px var(--gg);min-width:68px}
+#ppct{font-family:'Share Tech Mono',monospace;font-size:.62rem;color:var(--dim);flex:1;text-align:right}
+#scrub{width:100%;height:5px;-webkit-appearance:none;border-radius:3px;
+  background:linear-gradient(90deg,var(--g) var(--p,0%),var(--bdr) var(--p,0%));cursor:pointer;outline:none}
+#scrub::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;background:var(--g);
+  border-radius:50%;border:2px solid #000;box-shadow:0 0 8px var(--g);cursor:grab}
+#scrub::-webkit-slider-thumb:active{cursor:grabbing}
+.pends{display:flex;justify-content:space-between;font-family:'Share Tech Mono',monospace;font-size:.6rem;color:var(--dim);margin-top:3px}
+
+/* LOADING */
+#loading{position:absolute;inset:0;background:rgba(5,12,8,.94);flex-direction:column;align-items:center;justify-content:center;z-index:800;gap:14px;display:none}
+#loading.vis{display:flex}
+.lring{width:52px;height:52px;border-radius:50%;border:2px solid var(--bdr);border-top:2px solid var(--g);animation:spin 1s linear infinite;box-shadow:0 0 16px var(--gg)}
+@keyframes spin{to{transform:rotate(360deg)}}
+#ltxt{font-family:'Orbitron',monospace;font-size:.68rem;color:var(--g);letter-spacing:3px;animation:fade 1.2s ease-in-out infinite}
+@keyframes fade{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* MODAL */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s}
+.ov.vis{opacity:1;pointer-events:all}
+.modal{background:#050c08;border:1px solid var(--g);box-shadow:0 0 40px rgba(0,255,136,.15);width:480px;max-height:88vh;overflow-y:auto;padding:22px;position:relative}
+.mtit{font-family:'Orbitron',monospace;font-size:.9rem;font-weight:700;color:var(--g);text-shadow:0 0 12px var(--g);letter-spacing:2px;margin-bottom:6px}
+.msub{font-size:.76rem;color:var(--dim);margin-bottom:14px;line-height:1.55}
+.fl{font-size:.63rem;color:var(--gd);font-weight:700;text-transform:uppercase;letter-spacing:1px;display:block;margin-bottom:4px;margin-top:10px}
+.fi{width:100%;background:rgba(0,255,136,.04);border:1px solid var(--bdr);border-radius:2px;padding:6px 10px;font-family:'Share Tech Mono',monospace;font-size:.78rem;color:var(--g);outline:none;transition:border .2s}
+.fi:focus{border-color:var(--g);box-shadow:0 0 6px var(--gg)}
+.frow{display:flex;gap:10px}.fg{flex:1}
+.mnote{font-size:.66rem;color:var(--dim);margin:10px 0;padding:7px;border:1px solid var(--bdr);background:rgba(255,215,0,.02);line-height:1.5}
+/* airport grid - grouped by state */
+.apt-group{margin-bottom:10px}
+.apt-group-label{font-family:'Orbitron',monospace;font-size:.5rem;letter-spacing:2px;color:var(--dim);margin-bottom:4px}
+.apts{display:flex;flex-wrap:wrap;gap:4px}
+.apt{font-family:'Share Tech Mono',monospace;font-size:.63rem;padding:3px 8px;border:1px solid var(--bdr);color:var(--dim);cursor:pointer;border-radius:2px;transition:all .15s;white-space:nowrap}
+.apt:hover{border-color:var(--acc);color:var(--acc)}
+.apt.on{border-color:var(--g);color:var(--g);background:rgba(0,255,136,.07)}
+.mbtns{display:flex;gap:8px;margin-top:14px}
+.mb{flex:1;padding:8px;font-family:'Orbitron',monospace;font-size:.6rem;font-weight:700;letter-spacing:2px;cursor:pointer;border-radius:2px;transition:all .2s}
+.mb.p{background:rgba(0,255,136,.08);border:1px solid var(--g);color:var(--g)}
+.mb.p:hover{background:rgba(0,255,136,.2);box-shadow:0 0 10px var(--gg)}
+.mb.s{background:transparent;border:1px solid var(--dim);color:var(--dim)}
+.mb.s:hover{border-color:var(--acc);color:var(--acc)}
+
+/* STATUS BAR */
+#sbar{background:rgba(5,12,8,.96);border-top:1px solid var(--bdr);padding:4px 14px;display:flex;gap:14px;align-items:center;font-family:'Share Tech Mono',monospace;font-size:.63rem;color:var(--dim);flex-shrink:0}
+.si{display:flex;gap:4px}.sl{color:var(--gd)}.sv{color:var(--tx)}
+
+/* LEAFLET */
+.leaflet-container{background:#050c08}
+.leaflet-popup-content-wrapper{background:rgba(5,12,8,.97);border:1px solid var(--g);color:var(--tx);font-family:'Share Tech Mono',monospace;font-size:.7rem;border-radius:2px;box-shadow:0 0 12px var(--gg)}
+.leaflet-popup-tip{background:#0d2a18}
+.leaflet-control-zoom a{background:#050c08;border-color:var(--bdr);color:var(--g);font-size:14px}
+.hpop-delbtn{flex:1;font-family:'Orbitron',monospace;font-size:.58rem;font-weight:700;
+  letter-spacing:1px;padding:5px 8px;border:1px solid var(--hot);color:var(--hot);
+  background:rgba(255,107,53,.06);cursor:pointer;border-radius:2px;transition:all .2s}
+.hpop-delbtn:hover{background:rgba(255,107,53,.2);box-shadow:0 0 8px rgba(255,107,53,.4)}
+.del-ac-btn{font-family:'Orbitron',monospace;font-size:.5rem;padding:2px 6px;
+  border:1px solid var(--hot);color:var(--hot);background:transparent;
+  cursor:pointer;border-radius:2px;transition:all .15s;flex-shrink:0}
+.del-ac-btn:hover{background:rgba(255,107,53,.15)}
+.leaflet-control-zoom a:hover{background:#0a1f10}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-track{background:#0a1a10}::-webkit-scrollbar-thumb{background:var(--dim);border-radius:2px}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div id="hdr">
+  <div class="logo">ADS-B<b>TRACK</b></div>
+  <div id="pills">
+    <div class="pill lit" id="pStat">STANDBY</div>
+    <div class="pill" id="pAC">AIRCRAFT: 0</div>
+    <div class="pill" id="pMsg">MSGS: 0</div>
+    <div class="pill" id="pPos">POSITIONS: 0</div>
+    <div class="pill" id="pRef">REF: NONE</div>
+  </div>
+  <label class="hbtn a">📡 LOAD FILE<input type="file" id="fi" accept=".txt" multiple style="display:none"></label>
+  <button class="hbtn g" onclick="showRef()">📍 SET REF</button>
+  <button class="hbtn" style="border-color:#ffd700;color:#ffd700" onclick="exportData()" title="Export edited data as .txt">💾 EXPORT</button>
+</div>
+
+<!-- BODY -->
+<div id="body">
+  <!-- SIDEBAR -->
+  <div id="sb">
+    <div class="tabs">
+      <div class="tab on" onclick="swTab('data')">DATA</div>
+      <div class="tab" onclick="swTab('aircraft')">AIRCRAFT</div>
+      <div class="tab" onclick="swTab('log')">RAW LOG</div>
+    </div>
+
+    <!-- DATA TAB -->
+    <div class="pane on" id="pn-data">
+      <div class="dg">
+        <div class="dr"><span class="dl">Status</span><span class="dv w" id="dStat">NO DATA</span></div>
+        <div class="sep"></div>
+        <div class="dr"><span class="dl">ICAO</span><span class="dv a" id="dICAO">—</span></div>
+        <div class="dr"><span class="dl">Callsign</span><span class="dv" id="dCall">—</span></div>
+        <div class="dr"><span class="dl">Category</span><span class="dv" id="dCat">—</span></div>
+        <div class="sep"></div>
+        <div class="dr"><span class="dl">Latitude</span><span class="dv" id="dLat">—</span></div>
+        <div class="dr"><span class="dl">Longitude</span><span class="dv" id="dLon">—</span></div>
+        <div class="dr"><span class="dl">Altitude</span><span class="dv" id="dAlt">—</span></div>
+        <div class="sep"></div>
+        <div class="dr"><span class="dl">Start</span><span class="dv" id="dSt">—</span></div>
+        <div class="dr"><span class="dl">End</span><span class="dv" id="dEn">—</span></div>
+        <div class="dr"><span class="dl">Duration</span><span class="dv" id="dDur">—</span></div>
+        <div class="dr"><span class="dl">Positions</span><span class="dv" id="dPts">—</span></div>
+        <div class="sep"></div>
+        <div class="dr"><span class="dl">Track dist</span><span class="dv" id="dDist">—</span></div>
+        <div class="dr"><span class="dl">Lat range</span><span class="dv" id="dLR">—</span></div>
+        <div class="dr"><span class="dl">Lon range</span><span class="dv" id="dLoR">—</span></div>
+        <div class="sep"></div>
+        <div class="dr"><span class="dl">CPR mode</span><span class="dv" id="dCPR">—</span></div>
+        <div class="dr"><span class="dl">Reference</span><span class="dv" id="dRef">—</span></div>
+        <div class="dr"><span class="dl">Outliers</span><span class="dv h" id="dOut">—</span></div>
+        <div class="sep"></div>
+        <div class="dr"><span class="dl">Avg ground speed</span><span class="dv" id="dGS">—</span></div>
+        <div class="dr"><span class="dl">Speed range</span><span class="dv" id="dGSR">—</span></div>
+        <div class="dr"><span class="dl">Avg vert rate</span><span class="dv" id="dVR">—</span></div>
+        <div class="dr"><span class="dl">Velocity msgs</span><span class="dv" id="dVN">—</span></div>
+      </div>
+    </div>
+
+    <!-- AIRCRAFT TAB -->
+    <div class="pane" id="pn-aircraft">
+      <div class="ac-ctrl">
+        <button class="ac-ctrl-btn" onclick="acAll(true)">SELECT ALL</button>
+        <button class="ac-ctrl-btn" onclick="acAll(false)">DESELECT ALL</button>
+        <button class="ac-ctrl-btn" onclick="acOnlySelected()">ONLY SEL.</button>
+      </div>
+      <div class="acl" id="acl"><div style="padding:14px;color:var(--dim);font-size:.75rem">Load a recording to see aircraft</div></div>
+    </div>
+
+    <!-- LOG TAB -->
+    <div class="pane" id="pn-log">
+      <div class="ptit" id="logTit">RAW MESSAGE LOG</div>
+      <div class="log" id="logtbl"></div>
+    </div>
+  </div>
+
+  <!-- MAP -->
+  <div id="mwrap">
+    <div id="map"></div>
+
+    <!-- HUD -->
+    <div id="hud">
+      <div class="hbox"><div class="htit">POSITION</div><div class="hval" id="hPos">—</div></div>
+      <div class="hbox"><div class="htit">ALTITUDE</div><div class="hval" id="hAlt">— ft</div></div>
+      <div class="hbox"><div class="htit">UTC TIME</div><div class="hval" id="hTime">—</div></div>
+      <div class="hbox"><div class="htit">SPEED / TRACK</div><div class="hval" id="hGS">— kt</div></div>
+      <div class="hbox"><div class="htit">VERT RATE</div><div class="hval" id="hVR">— fpm</div></div>
+    </div>
+
+    <!-- RAW HEX POPUP -->
+    <div id="hexPop">
+      <div class="hpop-tit">
+        <span>📡 AIRBORNE POSITION MESSAGE</span>
+        <span class="hpop-close" onclick="closeHexPop()">✕</span>
+      </div>
+      <div id="hexRows"></div>
+      <div class="hpop-hex" id="hexRaw" onclick="copyHex()" title="Click to copy"></div>
+      <div class="hpop-copy" id="hexCopyHint">Click hex to copy (CRC stripped)</div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="hpop-delbtn" onclick="deleteCurrentPoint()">🗑 DELETE THIS POINT</button>
+      </div>
+    </div>
+
+    <!-- PLAY BAR -->
+    <div id="pbar">
+      <div class="ptop">
+        <button id="playbtn" onclick="togglePlay()">▶ PLAY</button>
+        <button id="resetbtn" onclick="resetPb()" title="Reset to start">⏮</button>
+        <div class="speeds">
+          <button class="spd on" onclick="setSpd(1,this)">1×</button>
+          <button class="spd" onclick="setSpd(2,this)">2×</button>
+          <button class="spd" onclick="setSpd(5,this)">5×</button>
+          <button class="spd" onclick="setSpd(10,this)">10×</button>
+          <button class="spd" onclick="setSpd(30,this)">30×</button>
+        </div>
+        <div id="ptime">—</div>
+        <div id="ppct">— / —</div>
+      </div>
+      <input type="range" id="scrub" min="0" max="100" value="0" oninput="onScrub(this)">
+      <div class="pends"><span id="pStart">—</span><span id="pEnd">—</span></div>
+    </div>
+
+    <!-- LOADING -->
+    <div id="loading">
+      <div class="lring"></div>
+      <div id="ltxt">LOADING</div>
+    </div>
+  </div>
+</div>
+
+<!-- STATUS BAR -->
+<div id="sbar">
+  <div class="si"><span class="sl">FILES:</span><span class="sv" id="sbF">—</span></div>
+  <div class="si"><span class="sl">MSGS:</span><span class="sv" id="sbM">—</span></div>
+  <div class="si"><span class="sl">POSITIONS:</span><span class="sv" id="sbP">—</span></div>
+  <div class="si"><span class="sl">AIRCRAFT:</span><span class="sv" id="sbA">—</span></div>
+  <div style="flex:1"></div>
+  <div class="si"><span class="sl">DO-260B</span></div>
+  <div class="si"><span class="sl">CPR:</span><span class="sv">LOCAL + GLOBAL</span></div>
+</div>
+
+<!-- REF MODAL -->
+<div class="ov" id="refOv">
+<div class="modal">
+  <div class="mtit">📍 REFERENCE POSITION</div>
+  <div class="msub">Select a nearby airport or enter coordinates. Must be within ~180 NM of the aircraft to correctly resolve the CPR longitude zone.</div>
+
+  <label class="fl">NSW / ACT</label>
+  <div class="apts" id="apt-nsw"></div>
+  <label class="fl">VIC / TAS</label>
+  <div class="apts" id="apt-vic"></div>
+  <label class="fl">QLD</label>
+  <div class="apts" id="apt-qld"></div>
+  <label class="fl">WA / SA / NT</label>
+  <div class="apts" id="apt-wa"></div>
+  <label class="fl">INTERNATIONAL</label>
+  <div class="apts" id="apt-intl"></div>
+
+  <label class="fl" style="margin-top:12px">OR ENTER COORDINATES</label>
+  <div class="frow">
+    <div class="fg"><label class="fl">Latitude (°)</label><input class="fi" id="rlat" type="number" step="0.0001" placeholder="-34.9489"></div>
+    <div class="fg"><label class="fl">Longitude (°)</label><input class="fi" id="rlon" type="number" step="0.0001" placeholder="150.5364"></div>
+  </div>
+  <label class="fl">Label</label>
+  <input class="fi" id="rlbl" type="text" placeholder="e.g. YSNW Nowra">
+
+  <div class="mnote">⚠ Any position within ~180 NM of the aircraft resolves the CPR zone. A nearby airfield or known GPS fix is ideal. Without a reference, only global paired CPR decode is available (lower density, may have zone errors).</div>
+  <div class="mbtns">
+    <button class="mb p" onclick="applyRef()">APPLY & DECODE</button>
+    <button class="mb s" onclick="hideOv('refOv')">CANCEL</button>
+  </div>
+</div>
+</div>
+
+<script>
+'use strict';
+// ═══════════════════════════════════════════════
+// AIRPORTS
+// ═══════════════════════════════════════════════
+const APTS = {
+  'apt-nsw': [
+    {code:'YSNW',name:'Nowra HMAS',     lat:-34.9489,lon:150.5364},
+    {code:'YSSF',name:'Shell Cove',     lat:-34.6081,lon:150.8780},
+    {code:'YMRY',name:'Moruya',         lat:-35.8978,lon:150.1436},
+    {code:'YSSY',name:'Sydney',         lat:-33.9461,lon:151.1772},
+    {code:'YWLM',name:'Williamtown',    lat:-32.7950,lon:151.8342},
+    {code:'YSCN',name:'Camden',         lat:-34.0403,lon:150.6872},
+    {code:'YSRI',name:'Richmond RAAF',  lat:-33.6006,lon:150.7811},
+    {code:'YSCB',name:'Canberra',       lat:-35.3069,lon:149.1950},
+    {code:'YSWG',name:'Wagga Wagga',    lat:-35.1653,lon:147.4658},
+    {code:'YCWA',name:'Cooma',          lat:-36.3003,lon:148.9742},
+  ],
+  'apt-vic': [
+    {code:'YMML',name:'Melbourne',      lat:-37.6733,lon:144.8430},
+    {code:'YMEN',name:'Essendon',       lat:-37.7283,lon:144.9019},
+    {code:'YMMB',name:'Moorabbin',      lat:-37.9758,lon:145.1022},
+    {code:'YMHB',name:'Hobart',         lat:-42.8361,lon:147.5103},
+    {code:'YLST',name:'Launceston',     lat:-41.5453,lon:147.2142},
+  ],
+  'apt-qld': [
+    {code:'YBBN',name:'Brisbane',       lat:-27.3842,lon:153.1175},
+    {code:'YBTL',name:'Townsville',     lat:-19.2525,lon:146.7653},
+    {code:'YCNS',name:'Cairns',         lat:-16.8858,lon:145.7553},
+    {code:'YBSU',name:'Sunshine Coast', lat:-26.5997,lon:153.0894},
+    {code:'YBMK',name:'Mackay',         lat:-21.1717,lon:149.1797},
+    {code:'YBRK',name:'Rockhampton',    lat:-23.3819,lon:150.4753},
+  ],
+  'apt-wa': [
+    {code:'YPPH',name:'Perth',          lat:-31.9403,lon:115.9672},
+    {code:'YPJT',name:'Jandakot',       lat:-32.0975,lon:115.8808},
+    {code:'YPKG',name:'Kalgoorlie',     lat:-30.7894,lon:121.4617},
+    {code:'YPAD',name:'Adelaide',       lat:-34.9450,lon:138.5308},
+    {code:'YPDN',name:'Darwin',         lat:-12.4147,lon:130.8765},
+    {code:'YBAS',name:'Alice Springs',  lat:-23.8067,lon:133.9022},
+  ],
+  'apt-intl': [
+    {code:'NZAA',name:'Auckland NZ',    lat:-37.0082,lon:174.7917},
+    {code:'WSSS',name:'Singapore',      lat:1.3644,  lon:103.9915},
+    {code:'VHHH',name:'Hong Kong',      lat:22.3089, lon:113.9144},
+    {code:'NFFN',name:'Nadi Fiji',      lat:-17.7553,lon:177.4431},
+  ],
+};
+
+(function buildAptBtns() {
+  for (const [grpId, list] of Object.entries(APTS)) {
+    const el = document.getElementById(grpId);
+    if (!el) continue;
+    list.forEach(ap => {
+      const b = document.createElement('div');
+      b.className = 'apt';
+      b.textContent = `${ap.code} ${ap.name}`;
+      b.dataset.lat = ap.lat; b.dataset.lon = ap.lon;
+      b.dataset.lbl = `${ap.code} ${ap.name}`;
+      b.onclick = () => {
+        document.getElementById('rlat').value = ap.lat;
+        document.getElementById('rlon').value = ap.lon;
+        document.getElementById('rlbl').value = b.dataset.lbl;
+        document.querySelectorAll('.apt').forEach(x => x.classList.remove('on'));
+        b.classList.add('on');
+      };
+      el.appendChild(b);
+    });
+  }
+})();
+
+// ═══════════════════════════════════════════════
+// CATEGORY SYMBOLS (SVG strings by TC + category)
+// ═══════════════════════════════════════════════
+function catSymbolSVG(tc, cat, color, size=20, heading=0) {
+  const c = color || '#00ff88';
+  const s = size;
+  const rot = `rotate(${heading},${s/2},${s/2})`;
+  // TC=4 emitter categories
+  if (tc === 4) {
+    if (cat === 7) { // Rotorcraft - circle with cross
+      return `<svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}">
+        <circle cx="${s/2}" cy="${s/2}" r="${s/2-2}" fill="none" stroke="${c}" stroke-width="1.5" opacity=".85"/>
+        <line x1="${s/2}" y1="2" x2="${s/2}" y2="${s-2}" stroke="${c}" stroke-width="1.5"/>
+        <line x1="2" y1="${s/2}" x2="${s-2}" y2="${s/2}" stroke="${c}" stroke-width="1.5"/>
+        <circle cx="${s/2}" cy="${s/2}" r="2" fill="${c}"/>
+      </svg>`;
+    }
+    if (cat === 6) { // High perf - sharp diamond
+      return `<svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}">
+        <polygon points="${s/2},1 ${s-2},${s/2} ${s/2},${s-1} 2,${s/2}" fill="${c}" opacity=".85" transform="${rot}"/>
+      </svg>`;
+    }
+    if (cat === 5) { // Heavy - wide triangle
+      return `<svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}">
+        <polygon points="${s/2},2 ${s-1},${s-2} 1,${s-2}" fill="${c}" opacity=".85" transform="${rot}"/>
+        <polygon points="${s/2},5 ${s-4},${s-3} 4,${s-3}" fill="none" stroke="#000" stroke-width=".5"/>
+      </svg>`;
+    }
+    if (cat === 4) { // Hi-vortex (B757) - triangle with winglets
+      return `<svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}">
+        <polygon points="${s/2},2 ${s-2},${s-3} 1,${s-3}" fill="${c}" opacity=".8" transform="${rot}"/>
+        <rect x="1" y="${s-4}" width="3" height="3" fill="${c}" opacity=".8" transform="${rot}"/>
+        <rect x="${s-4}" y="${s-4}" width="3" height="3" fill="${c}" opacity=".8" transform="${rot}"/>
+      </svg>`;
+    }
+    if (cat === 3) { // Large airliner - triangle
+      return `<svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}">
+        <polygon points="${s/2},2 ${s-2},${s-2} 1,${s-2}" fill="${c}" opacity=".85" transform="${rot}"/>
+      </svg>`;
+    }
+    if (cat === 2) { // Small - smaller triangle
+      return `<svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}">
+        <polygon points="${s/2},4 ${s-3},${s-3} 3,${s-3}" fill="${c}" opacity=".85" transform="${rot}"/>
+      </svg>`;
+    }
+    if (cat === 1) { // Light - small thin triangle
+      return `<svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}">
+        <polygon points="${s/2},5 ${s-4},${s-3} 4,${s-3}" fill="${c}" opacity=".85" transform="${rot}"/>
+      </svg>`;
+    }
+  }
+  if (tc === 3) {
+    if (cat === 1) { // Glider - long thin wings
+      return `<svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}">
+        <polygon points="${s/2},${s/2-1} ${s-1},${s/2+3} ${s/2},${s/2+2} 1,${s/2+3}" fill="${c}" opacity=".8"/>
+        <line x1="${s/2}" y1="2" x2="${s/2}" y2="${s-2}" stroke="${c}" stroke-width="1.2" opacity=".8"/>
+      </svg>`;
+    }
+    if (cat === 6) { // UAV - diamond
+      return `<svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}">
+        <polygon points="${s/2},2 ${s-2},${s/2} ${s/2},${s-2} 2,${s/2}" fill="none" stroke="${c}" stroke-width="1.5" opacity=".85"/>
+        <circle cx="${s/2}" cy="${s/2}" r="2" fill="${c}"/>
+      </svg>`;
+    }
+    if (cat === 2) { // Lighter-than-air - circle
+      return `<svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}">
+        <ellipse cx="${s/2}" cy="${s/2-1}" rx="${s/2-2}" ry="${s/2-3}" fill="${c}" opacity=".6"/>
+        <line x1="${s/2}" y1="${s/2+2}" x2="${s/2}" y2="${s-2}" stroke="${c}" stroke-width="1.2"/>
+      </svg>`;
+    }
+  }
+  if (tc === 2) { // Surface vehicle - square
+    return `<svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}">
+      <rect x="3" y="3" width="${s-6}" height="${s-6}" fill="${c}" opacity=".7" rx="1"/>
+    </svg>`;
+  }
+  // Default - arrow triangle
+  return `<svg width="${s}" height="${s}" viewBox="0 0 ${s} ${s}">
+    <polygon points="${s/2},2 ${s-3},${s-2} ${s/2},${s-5} 3,${s-2}" fill="${c}" opacity=".85" transform="${rot}"/>
+  </svg>`;
+}
+
+function catLabel(tc, cat) {
+  const m = {
+    4: ['No info','Light <7t','Small 7-34t','Large 34-136t','Hi-vortex (B757)','Heavy >136t','Hi-perf','Rotorcraft'],
+    3: ['No info','Glider','Lighter-than-air','Parachutist','Ultralight','Reserved','UAV','Space'],
+    2: ['No info','Emerg veh','Service veh','Fixed obstacle','Cluster','Line','Res','Res'],
+    1: ['Reserved','Reserved','Reserved','Reserved','Reserved','Reserved','Reserved','Reserved'],
+  };
+  return (m[tc]||[])[cat] || `TC${tc}/CAT${cat}`;
+}
+
+// ═══════════════════════════════════════════════
+// DECODE ENGINE
+// ═══════════════════════════════════════════════
+function g2i(g){let n=g,m=n>>1;while(m){n^=m;m>>=1;}return n}
+
+function gillham(c) {
+  if (c & 1) return null;
+  const c1=(c>>11)&1,a1=(c>>10)&1,c2=(c>>9)&1,a2=(c>>8)&1,
+        c4=(c>>7)&1, a4=(c>>6)&1,b1=(c>>5)&1,b2=(c>>4)&1,
+        b4=(c>>3)&1, d1=(c>>2)&1,d2=(c>>1)&1;
+  const cg=(c1<<7)|(c2<<6)|(c4<<5)|(d1<<4)|(b1<<3)|(b2<<2)|(b4<<1)|d2;
+  const c5=g2i(cg),ag=(a1<<2)|(a2<<1)|a4,a1v=g2i(ag);
+  if (!c5 || a1v<1 || a1v>5) return null;
+  return 500*(c5-1)+((c5%2===1)?(a1v-1)*100:(5-a1v)*100)-1200;
+}
+
+function decAlt(ac) {
+  if (!ac) return null;
+  if ((ac>>4)&1) return (((ac>>5)&0x7F)<<4|(ac&0xF))*25-1000;
+  return gillham(ac);
+}
+
+// TC=19 Airborne Velocity decoder (DO-260B §2.2.3.2.6.7)
+// mu = ME bits 1-28, ml = ME bits 29-56 (both as 28-bit integers)
+// ME bit N → mu bit (28-N) for bits 1-28; ml bit (56-N) for bits 29-56
+function decodeVel(mu, ml) {
+  const tc = mu >> 23;
+  if (tc !== 19) return null;
+  const subtype = (mu >> 20) & 0x7;
+  // Vertical rate — same position for all subtypes
+  // ME bit 36→ml bit 20, bit 37→ml bit 19, bits 38-46→ml bits 18-10
+  const vrSrc  = (ml >> 20) & 1;        // 0=GNSS, 1=Baro
+  const vrSign = (ml >> 19) & 1;        // 0=up, 1=down
+  const vrMag  = (ml >> 10) & 0x1FF;    // 9 bits
+  let vr = 0;
+  if (vrMag > 0) { vr = (vrMag - 1) * 64; if (vrSign) vr = -vr; }
+
+  if (subtype === 1 || subtype === 2) {
+    const scale = subtype === 1 ? 1 : 4;
+    // ME bit 14→mu bit 14: E-W direction; bits 15-24→mu bits 13-4: E-W vel (10 bits)
+    // ME bit 25→mu bit 3: N-S direction
+    // ME bits 26-35: top 3 in mu bits 2-0, bottom 7 in ml bits 27-21
+    const dew = (mu >> 14) & 1;
+    const vew = (mu >>  4) & 0x3FF;
+    const dns = (mu >>  3) & 1;
+    const vns = ((mu & 0x7) << 7) | ((ml >> 21) & 0x7F);
+    let ew = vew > 0 ? (vew - 1) * scale : 0;
+    let ns = vns > 0 ? (vns - 1) * scale : 0;
+    if (dew) ew = -ew;
+    if (dns) ns = -ns;
+    const gs  = Math.round(Math.sqrt(ew*ew + ns*ns));
+    const trk = ((Math.atan2(ew, ns) * 180 / Math.PI) + 360) % 360;
+    return { type:'gs', subtype, gs, trk: Math.round(trk * 10) / 10,
+             ew: Math.round(ew), ns: Math.round(ns),
+             vr, vrSrc: vrSrc ? 'Baro' : 'GNSS' };
+  }
+  if (subtype === 3 || subtype === 4) {
+    const scale = subtype === 3 ? 1 : 4;
+    const hdgAvail = (mu >> 14) & 1;
+    const hdgRaw   = (mu >>  4) & 0x3FF;
+    const hdg = hdgAvail ? Math.round(hdgRaw * 360 / 1024 * 10) / 10 : null;
+    const asType = (mu >> 3) & 1;  // 0=IAS, 1=TAS
+    const asRaw  = ((mu & 0x7) << 7) | ((ml >> 21) & 0x7F);
+    const as = asRaw > 0 ? (asRaw - 1) * scale : 0;
+    return { type:'as', subtype, hdg, as: Math.round(as),
+             asType: asType ? 'TAS' : 'IAS',
+             vr, vrSrc: vrSrc ? 'Baro' : 'GNSS' };
+  }
+  return null;
+}
+
+function nl(lat) {
+  if (Math.abs(lat) >= 87) return 1;
+  return Math.max(1, Math.min(59,
+    Math.floor(2*Math.PI/Math.acos(1-(1-Math.cos(Math.PI/30))/Math.cos(lat*Math.PI/180)**2))));
+}
+
+// Local CPR — each frame decoded independently with reference
+function cprLoc(cl, co, f, rlat, rlon) {
+  const dlat = f===0 ? 6.0 : 360.0/59;
+  const j = Math.floor(rlat/dlat + 0.5 - cl/131072);
+  const lat = dlat*(j + cl/131072);
+  const nlV = f===0 ? nl(lat) : Math.max(nl(lat)-1, 1);
+  const dlon = 360.0/Math.max(nlV, 1);
+  const m = Math.floor(rlon/dlon + 0.5 - co/131072);
+  let lon = dlon*(m + co/131072);
+  if (lon > 180) lon -= 360;
+  if (lon < -180) lon += 360;
+  return [lat, lon];
+}
+
+// Global CPR — pair even+odd frames (no ref needed, lower density)
+function cprGlob(el, eo, ol, oo) {
+  const j = Math.floor(59*el/131072 - 60*ol/131072 + 0.5);
+  let r0 = 6.0*(j%60 + el/131072);
+  let r1 = (360/59)*(j%59 + ol/131072);
+  if (r0 >= 270) r0 -= 360;
+  if (r1 >= 270) r1 -= 360;
+  if (nl(r0) !== nl(r1)) return null;
+  const nv = nl(r1), dl = 360/Math.max(nv,1);
+  const m = Math.floor(eo*(nv-1)/131072 - oo*nv/131072 + 0.5);
+  let lon = dl*(m%Math.max(nv,1) + oo/131072);
+  if (lon > 180) lon -= 360;
+  return [r1, lon];
+}
+
+function haver(a,b,c,d){
+  const R=6371,dL=(c-a)*Math.PI/180,dO=(d-b)*Math.PI/180;
+  const x=Math.sin(dL/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dO/2)**2;
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+
+// ═══════════════════════════════════════════════
+// FORMATTERS
+// ═══════════════════════════════════════════════
+function fmtT(ts) {
+  const s=Math.round(ts%86400);
+  return [Math.floor(s/3600),Math.floor((s%3600)/60),s%60]
+    .map(v=>String(v).padStart(2,'0')).join(':')+'Z';
+}
+function fmtC(la,lo) {
+  return`${Math.abs(la).toFixed(5)}°${la<0?'S':'N'}  ${Math.abs(lo).toFixed(5)}°${lo<0?'W':'E'}`;
+}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+
+// ═══════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════
+let refLat=null, refLon=null, refLbl='NONE';
+let rawMsgs=[], aircraft={}, selICAO=null;
+let trkLayers={}, mkrLayers={}, dotLayers={};
+let visSet=new Set();  // ICAOs currently visible on map
+let pbArr=[], pbIdx=0, pbPlay=false, pbSpd=1, pbTimer=null;
+let pbMarkers={}, pbTrails={};  // per-ICAO playback markers and trails
+let pendingFiles=null;
+const COLS=['#00ff88','#00e5ff','#ff6b35','#ffd700','#c084fc','#fb923c','#86efac','#38bdf8'];
+let cIdx=0;
+
+// ═══════════════════════════════════════════════
+// MAP
+// ═══════════════════════════════════════════════
+const map = L.map('map', {center:[-35.13,151.01],zoom:11,zoomControl:false,attributionControl:true});
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+  attribution:'© OpenStreetMap © CARTO',subdomains:'abcd',maxZoom:20}).addTo(map);
+L.control.zoom({position:'bottomright'}).addTo(map);
+
+let refMkr=null;
+function placeRefMkr(){
+  if (!refLat) return;
+  if (refMkr) map.removeLayer(refMkr);
+  const ic=L.divIcon({html:`<div style="width:16px;height:16px;border-radius:50%;border:2px solid #ffd700;background:rgba(255,215,0,.1);box-shadow:0 0 10px #ffd700"></div>`,className:'',iconSize:[16,16],iconAnchor:[8,8]});
+  refMkr=L.marker([refLat,refLon],{icon:ic,interactive:false,zIndexOffset:-200})
+    .bindTooltip(`REF: ${refLbl}`,{permanent:false,direction:'right'}).addTo(map);
+}
+
+// ═══════════════════════════════════════════════
+// FILE HANDLING
+// ═══════════════════════════════════════════════
+document.getElementById('fi').onchange=function(){
+  if (this.files.length) handleFiles([...this.files]);
+  this.value='';
+};
+document.body.addEventListener('dragover',e=>e.preventDefault());
+document.body.addEventListener('drop',e=>{e.preventDefault();if(e.dataTransfer.files.length)handleFiles([...e.dataTransfer.files]);});
+
+function handleFiles(files) {
+  pendingFiles = files;
+  showRef(true);
+}
+
+async function processFiles(files) {
+  load(true,'PARSING FILES'); await sleep(40);
+  const names=[];
+  for (const f of files) {
+    names.push(f.name);
+    const txt = await f.text();
+    for (const line of txt.split(/\r?\n/)) {
+      const m = parseLine(line);
+      if (m) rawMsgs.push(m);
+    }
+  }
+  rawMsgs.sort((a,b)=>a.ts-b.ts);
+
+  load(true,'DECODING CPR'); await sleep(40);
+  await buildAC();
+  renderAll();
+
+  document.getElementById('sbF').textContent = names.join(', ');
+  document.getElementById('sbM').textContent = rawMsgs.length;
+  document.getElementById('sbA').textContent = Object.keys(aircraft).length;
+  pill('pMsg',`MSGS: ${rawMsgs.length}`,false);
+  pill('pAC',`AIRCRAFT: ${Object.keys(aircraft).length}`,false);
+  renderLog();
+  load(false);
+}
+
+function parseLine(line) {
+  const p = line.trim().split(';');
+  if (p.length < 2) return null;
+  const h=p[0].trim(), ts=parseFloat(p[1]);
+  if (isNaN(ts) || h.length < 28) return null;
+  try { if(isNaN(parseInt(h,16))) return null; } catch { return null; }
+  const df = parseInt(h.slice(0,2),16)>>3;
+  if (df !== 17) return {ts,h:h.toUpperCase(),type:'raw'};
+  const icao=h.slice(2,8).toUpperCase();
+  const mu=parseInt(h.slice(8,15),16), ml=parseInt(h.slice(15,22),16);
+  const tc=mu>>23;
+  const r={ts,icao,tc,h:h.toUpperCase()};
+  if (tc>=9 && tc<=18) {
+    r.type='pos'; r.f=(mu>>6)&1;
+    r.cl=(mu&0x3F)*2048+(ml>>17); r.co=ml&0x1FFFF;
+    r.alt=decAlt((mu>>8)&0xFFF); r.ss=(mu>>21)&3;
+  } else if (tc>=1 && tc<=4) {
+    const fid=((mu&0xFFFFF)*Math.pow(2,28)+ml);
+    let cs='';
+    for (let i=7;i>=0;i--){
+      const c=Math.floor(fid/Math.pow(64,i))%64;
+      cs+=c>=1&&c<=26?String.fromCharCode(64+c):c===32||c===0?' ':c>=48&&c<=57?String.fromCharCode(c):'?';
+    }
+    r.type='id'; r.callsign=cs.trim(); r.cat=(mu>>20)&7; r.tcs=tc;
+  } else if (tc===19) {
+    r.type='vel';
+    const vd=decodeVel(mu,ml);
+    if(vd) r.vel=vd;
+  }
+  else { r.type='oth'; }
+  return r;
+}
+
+// ═══════════════════════════════════════════════
+// BUILD AIRCRAFT DATA
+// All data grouped strictly by ICAO hex code
+// ═══════════════════════════════════════════════
+async function buildAC() {
+  // Group ALL messages by ICAO - this is the single source of truth
+  const byICAO = {};
+  for (const m of rawMsgs) {
+    if (!m.icao || m.type==='raw') continue;
+    if (!byICAO[m.icao]) byICAO[m.icao] = {pos:[],id:[],vel:[],all:[]};
+    byICAO[m.icao].all.push(m);
+    if (m.type==='pos') byICAO[m.icao].pos.push(m);
+    else if (m.type==='id') byICAO[m.icao].id.push(m);
+    else if (m.type==='vel'&&m.vel) byICAO[m.icao].vel.push(m);
+  }
+
+  aircraft = {};
+  let tp = 0;
+  for (const [icao, d] of Object.entries(byICAO)) {
+    const {pos, rem} = decodePos(d.pos);
+    // Accumulate ALL id messages for this ICAO — take last non-empty callsign
+    let callsign = icao, cat = null, tcs = null;
+    for (const idm of d.id) {
+      if (idm.callsign && idm.callsign.length > 0) callsign = idm.callsign;
+      cat = idm.cat; tcs = idm.tcs;
+    }
+    aircraft[icao] = {
+      icao, callsign, cat, tcs,
+      positions: pos,
+      msgs: d.all.length,
+      rem,
+      allMsgs: d.all,
+      velMsgs: (d.vel||[]).sort((a,b)=>a.ts-b.ts),
+    };
+    tp += pos.length;
+  }
+
+  document.getElementById('sbP').textContent = tp;
+  pill('pPos',`POSITIONS: ${tp}`,false);
+
+  // Default: all visible
+  visSet = new Set(Object.keys(aircraft));
+}
+
+function decodePos(msgs) {
+  if (!msgs.length) return {pos:[],rem:0};
+  msgs.sort((a,b)=>a.ts-b.ts);
+  const raw=[];
+
+  if (refLat !== null) {
+    // LOCAL DECODE — each frame independently, no pairing needed
+    for (const m of msgs) {
+      const [lat,lon] = cprLoc(m.cl, m.co, m.f, refLat, refLon);
+      raw.push({ts:m.ts, lat, lon, alt:m.alt, f:m.f, mode:'local', srcHex:m.h,
+               cl:m.cl, co:m.co, tc:m.tc, ss:m.ss});
+    }
+  } else {
+    // GLOBAL DECODE — pair even+odd within 10 seconds
+    let ev=null, od=null;
+    for (const m of msgs) {
+      if (m.f===0) ev=m; else od=m;
+      if (!ev||!od||Math.abs(ev.ts-od.ts)>10) continue;
+      const g = cprGlob(ev.cl,ev.co,od.cl,od.co);
+      if (!g) continue;
+      const [lat,lon]=g;
+      raw.push({ts:Math.max(ev.ts,od.ts), lat, lon,
+        alt:(od.ts>ev.ts?od:ev).alt, f:od.f, mode:'global',
+        srcHex:(od.ts>ev.ts?od:ev).h, cl:od.cl, co:od.co, tc:od.tc, ss:od.ss});
+    }
+  }
+
+  if (!raw.length) return {pos:[],rem:0};
+
+  // Outlier filter — velocity-based sequential comparison.
+  // Each point is compared to the PREVIOUS ACCEPTED point.
+  // Threshold = min(50 km, max_speed * time_gap * tolerance)
+  // Handles long reception gaps (aircraft moves legitimately) and corrupt single
+  // frames (impossible jump for elapsed time), without any global-median bias.
+  const MAX_SPEED = 0.160;  // km/s (~310 kt)
+  const VEL_TOL   = 3.0;    // tolerance multiplier (~930 kt absolute ceiling)
+  const GLOBAL_CAP = 50.0;  // km hard cap regardless of time gap
+  raw.sort((a,b)=>a.ts-b.ts);
+  const good = [];
+  let prev = null;
+  for (const p of raw) {
+    if (!prev) { good.push(p); prev = p; continue; }
+    const dt   = p.ts - prev.ts;
+    const thr  = Math.min(GLOBAL_CAP, MAX_SPEED * dt * VEL_TOL);
+    const dist = haver(prev.lat, prev.lon, p.lat, p.lon);
+    if (dist <= thr) { good.push(p); prev = p; }
+    // If dropped, keep prev unchanged — next point still compared against
+    // the last known-good position.
+  }
+  return {pos:good, rem:raw.length-good.length};
+}
+
+// ═══════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════
+function renderAll() {
+  // Clear old layers
+  for (const l of Object.values(trkLayers)) map.removeLayer(l);
+  for (const l of Object.values(mkrLayers)) map.removeLayer(l);
+  trkLayers={}; mkrLayers={}; dotLayers={};
+  cIdx=0;
+
+  const bounds=[];
+  let nVis=0;
+
+  for (const [icao,ac] of Object.entries(aircraft)) {
+    if (!ac.positions.length) continue;
+    const col = COLS[cIdx%COLS.length];
+    ac.col = col; cIdx++;
+
+    if (!visSet.has(icao)) {
+      // Still assign colour but don't render
+      continue;
+    }
+    nVis++;
+
+    const lls = ac.positions.map(p=>[p.lat,p.lon]);
+
+    // Track polyline (glow + line)
+    const gl = L.polyline(lls,{color:col,weight:8,opacity:.1,interactive:false});
+    const ln = L.polyline(lls,{color:col,weight:2,opacity:.85});
+
+    // Click handler on line — shows hex popup for nearest point
+    ln.on('click', e => {
+      const nearest = nearestPoint(ac.positions, e.latlng);
+      if (nearest) showHexPop(nearest, ac, e.originalEvent.clientX, e.originalEvent.clientY);
+      selAC(icao, true);
+    });
+
+    trkLayers[icao] = L.layerGroup([gl,ln]).addTo(map);
+
+    // Start circle & end triangle markers
+    const s = ac.positions[0], end = ac.positions[ac.positions.length-1];
+    const sm = L.circleMarker([s.lat,s.lon],{radius:5,fillColor:col,color:'#fff',weight:1.5,fillOpacity:.9})
+      .bindPopup(`<b>START</b> ${icao}/${ac.callsign}<br>${fmtC(s.lat,s.lon)}<br>${fmtT(s.ts)}`)
+      .on('click',()=>selAC(icao,true));
+
+    const triIc = L.divIcon({html:catSymbolSVG(ac.tcs,ac.cat,col,22,0),className:'',iconSize:[22,22],iconAnchor:[11,11]});
+    const em = L.marker([end.lat,end.lon],{icon:triIc})
+      .bindPopup(`<b>END</b> ${icao}/${ac.callsign}<br>${fmtC(end.lat,end.lon)}<br>${fmtT(end.ts)}`)
+      .on('click',()=>selAC(icao,true));
+
+    // Position dots (clickable for raw hex)
+    const dotGroup = L.layerGroup();
+    for (const pos of ac.positions) {
+      const dot = L.circleMarker([pos.lat,pos.lon],{
+        radius:3,fillColor:col,color:'transparent',fillOpacity:.6,interactive:true
+      });
+      dot.on('click', e => {
+        showHexPop(pos, ac, e.originalEvent.clientX, e.originalEvent.clientY);
+        selAC(icao,true);
+        L.DomEvent.stopPropagation(e);
+      });
+      dotGroup.addLayer(dot);
+    }
+    dotLayers[icao] = dotGroup.addTo(map);
+    mkrLayers[icao] = L.layerGroup([sm,em]).addTo(map);
+    bounds.push(...lls);
+  }
+
+  if (bounds.length) map.fitBounds(L.latLngBounds(bounds).pad(.1));
+  renderACList();
+  const acs = Object.values(aircraft).filter(a=>a.positions.length>0);
+  if (acs.length) selAC(acs[0].icao);
+  if (nVis) pill('pStat',`TRACKING ${nVis} AIRCRAFT`,true);
+  placeRefMkr();
+}
+
+function nearestVel(ac, ts, maxDt=10) {
+  const vms = ac && ac.velMsgs;
+  if (!vms || !vms.length) return null;
+  let best=null, bestD=maxDt+1;
+  let lo=0, hi=vms.length-1;
+  while(lo<hi){const mid=(lo+hi)>>1;if(vms[mid].ts<ts)lo=mid+1;else hi=mid;}
+  for(let i=Math.max(0,lo-2);i<=Math.min(vms.length-1,lo+2);i++){
+    const d=Math.abs(vms[i].ts-ts);
+    if(d<bestD){bestD=d;best=vms[i].vel;}
+  }
+  return best;
+}
+
+function nearestPoint(positions, latlng) {
+  let best=null, bestD=Infinity;
+  for (const p of positions) {
+    const d = haver(latlng.lat,latlng.lng,p.lat,p.lon);
+    if (d < bestD) { bestD=d; best=p; }
+  }
+  return best;
+}
+
+// ── Aircraft visibility toggle ───────────────────
+function toggleVis(icao) {
+  if (visSet.has(icao)) visSet.delete(icao);
+  else visSet.add(icao);
+  applyVis();
+  renderACList();
+  renderLog();
+}
+
+function applyVis() {
+  for (const [icao,ac] of Object.entries(aircraft)) {
+    const show = visSet.has(icao) && ac.positions.length>0;
+    const layers = [trkLayers[icao],mkrLayers[icao],dotLayers[icao]];
+    for (const l of layers) {
+      if (!l) continue;
+      if (show && !map.hasLayer(l)) l.addTo(map);
+      if (!show && map.hasLayer(l)) map.removeLayer(l);
+    }
+  }
+}
+
+function acAll(state) {
+  for (const icao of Object.keys(aircraft)) {
+    if (state) visSet.add(icao);
+    else visSet.delete(icao);
+  }
+  applyVis(); renderACList(); renderLog();
+}
+
+function acOnlySelected() {
+  // Show ONLY the currently selected ICAO
+  if (!selICAO) return;
+  visSet.clear(); visSet.add(selICAO);
+  applyVis(); renderACList(); renderLog();
+}
+
+// ═══════════════════════════════════════════════
+// AIRCRAFT LIST
+// ═══════════════════════════════════════════════
+function renderACList() {
+  const el = document.getElementById('acl');
+  el.innerHTML = '';
+  const sorted = Object.values(aircraft).sort((a,b)=>b.positions.length-a.positions.length);
+  for (const ac of sorted) {
+    const visible = visSet.has(ac.icao);
+    const selected = selICAO === ac.icao;
+    const div = document.createElement('div');
+    div.className = `aci${selected?' on':''}`;
+    div.innerHTML = `
+      <div class="aci-inner">
+        <div class="ac-chk${visible?' checked':''}" onclick="event.stopPropagation();toggleVis('${ac.icao}')"></div>
+        <div class="ac-sym">${catSymbolSVG(ac.tcs,ac.cat,ac.col||'#3d7a55',18,0)}</div>
+        <div class="acicao">${ac.icao}</div>
+        <div class="accall">${ac.callsign||'—'}</div>
+        <div class="acn">${ac.positions.length}pts</div>
+        <button class="del-ac-btn" onclick="event.stopPropagation();deleteAircraft('${ac.icao}')" title="Remove aircraft">✕</button>
+      </div>`;
+    div.onclick = () => { selAC(ac.icao); swTab('data'); };
+    el.appendChild(div);
+  }
+}
+
+function selAC(icao, noZoom=false) {
+  selICAO = icao;
+  const ac = aircraft[icao];
+  if (!ac) return;
+  renderACList();
+  updatePanel(ac);
+  renderLog(); // filter log to this aircraft
+  if (ac.positions.length) {
+    // Only zoom to track bounds when explicitly selecting from the aircraft list/tab
+    if (!noZoom && visSet.has(icao)) {
+      const lls = ac.positions.map(p=>[p.lat,p.lon]);
+      map.fitBounds(L.latLngBounds(lls).pad(.1));
+    }
+    setupPb();
+  }
+}
+
+function updatePanel(ac) {
+  const s=(id,v,cls)=>{const e=document.getElementById(id);if(e){e.textContent=v;if(cls){e.className='dv '+cls;}}};
+  const p=ac.positions;
+  s('dStat',p.length?'ACTIVE':'NO POSITIONS','w');
+  s('dICAO',ac.icao,'a'); s('dCall',ac.callsign||'—','');
+  s('dCat',ac.cat!=null?catLabel(ac.tcs,ac.cat):'—','');
+  if (!p.length) return;
+  const last=p[p.length-1];
+  s('dLat',last.lat.toFixed(6)+'°',''); s('dLon',last.lon.toFixed(6)+'°','');
+  s('dAlt',last.alt!=null?last.alt+' ft':'Not encoded','');
+  s('dSt',fmtT(p[0].ts),''); s('dEn',fmtT(last.ts),'');
+  const dur=last.ts-p[0].ts;
+  s('dDur',`${Math.floor(dur/60)}m ${Math.round(dur%60)}s`,'');
+  s('dPts',p.length,'');
+  const lats=p.map(x=>x.lat),lons=p.map(x=>x.lon);
+  s('dLR',`${Math.min(...lats).toFixed(4)}°→${Math.max(...lats).toFixed(4)}°`,'');
+  s('dLoR',`${Math.min(...lons).toFixed(4)}°→${Math.max(...lons).toFixed(4)}°`,'');
+  let dist=0;for(let i=1;i<p.length;i++)dist+=haver(p[i-1].lat,p[i-1].lon,p[i].lat,p[i].lon);
+  s('dDist',dist.toFixed(2)+' km','');
+  s('dCPR',p[0]?.mode==='local'?'LOCAL per-frame':'GLOBAL paired','');
+  s('dRef',refLat?`${refLbl}`:'NONE','');
+  s('dOut',ac.rem>0?`${ac.rem} removed`:'0',ac.rem>0?'h':'');
+  // Velocity stats
+  const vms=ac.velMsgs||[];
+  const gsVels=vms.filter(m=>m.vel&&m.vel.type==='gs').map(m=>m.vel.gs);
+  s('dVN',vms.length?vms.length+' msgs':'—','');
+  if(gsVels.length){
+    const avgGs=Math.round(gsVels.reduce((a,b)=>a+b,0)/gsVels.length);
+    s('dGS',avgGs+' kt','');
+    s('dGSR',Math.min(...gsVels)+' – '+Math.max(...gsVels)+' kt','');
+    const vrVals=vms.filter(m=>m.vel).map(m=>m.vel.vr);
+    if(vrVals.length){
+      const avgVr=Math.round(vrVals.reduce((a,b)=>a+b,0)/vrVals.length);
+      s('dVR',(avgVr>=0?'+':'')+avgVr+' fpm','');
+    }else s('dVR','—','');
+  }else{s('dGS','—','');s('dGSR','—','');s('dVR','—','');}
+  hudUpd(last, ac);
+}
+
+function hudUpd(p, ac) {
+  document.getElementById('hPos').textContent=fmtC(p.lat,p.lon);
+  document.getElementById('hAlt').textContent=p.alt!=null?p.alt+' ft':'— ft';
+  document.getElementById('hTime').textContent=fmtT(p.ts);
+  const vel=ac?nearestVel(ac,p.ts):null;
+  const gsEl=document.getElementById('hGS'), vrEl=document.getElementById('hVR');
+  if(gsEl){
+    if(vel&&vel.type==='gs'){
+      gsEl.textContent=vel.gs+' kt / '+vel.trk.toFixed(0)+'°';
+      if(vrEl)vrEl.textContent=(vel.vr>=0?'▲ ':' ▼ ')+Math.abs(vel.vr)+' fpm';
+    }else if(vel&&vel.type==='as'){
+      gsEl.textContent=(vel.hdg!=null?vel.hdg.toFixed(0)+'° / ':'')+vel.as+' kt '+vel.asType;
+      if(vrEl)vrEl.textContent=(vel.vr>=0?'▲ ':' ▼ ')+Math.abs(vel.vr)+' fpm';
+    }else{gsEl.textContent='— kt';if(vrEl)vrEl.textContent='— fpm';}
+  }
+}
+
+// ═══════════════════════════════════════════════
+// RAW LOG — filtered to visible/selected aircraft
+// ═══════════════════════════════════════════════
+function renderLog() {
+  const el = document.getElementById('logtbl');
+  el.innerHTML='';
+
+  // Determine which ICAOs to show: if an aircraft is selected, show only that one.
+  // Otherwise show all visible aircraft.
+  const showICAOs = selICAO ? new Set([selICAO]) : visSet;
+  const label = selICAO ? `LOG — ${selICAO} / ${aircraft[selICAO]?.callsign||''}` : 'RAW MESSAGE LOG';
+  document.getElementById('logTit').textContent = label;
+
+  // Collect messages from relevant aircraft, sorted by timestamp
+  const msgs = rawMsgs
+    .filter(m=>m.icao && showICAOs.has(m.icao) && m.type!=='raw')
+    .slice(0,600);
+
+  for (const m of msgs) {
+    const div=document.createElement('div');
+    div.className='lr';
+    const ty=m.type==='pos'?'POS':m.type==='id'?'ID ':m.type==='vel'?'VEL':'OTH';
+    const vd=m.vel;
+    const dt=m.type==='pos'
+      ?`F=${m.f} CPR_LAT=${m.cl} CPR_LON=${m.co}${m.alt!=null?' ALT='+m.alt+'ft':''}`
+      :m.type==='id'?`'${m.callsign}' CAT=${m.cat} TC=${m.tcs}`
+      :m.type==='vel'&&vd
+        ?(vd.type==='gs'
+          ?`GS=${vd.gs}kt TRK=${vd.trk}° VR=${vd.vr>=0?'+':''}${vd.vr}fpm ${vd.vrSrc}`
+          :`HDG=${vd.hdg!=null?vd.hdg+'°':'?'} ${vd.asType}=${vd.as}kt VR=${vd.vr>=0?'+':''}${vd.vr}fpm`)
+      :m.h||'';
+    div.innerHTML=`<span class="lts">${fmtT(m.ts)}</span><span class="lic">${m.icao}</span><span class="lty">${ty}</span><span class="ld">${dt}</span>`;
+    // Click to show hex popup
+    if (m.type==='pos' && m.h) {
+      div.onclick=()=>{
+        const ac=aircraft[m.icao];
+        if(ac) { const pos=ac.positions.find(p=>Math.abs(p.ts-m.ts)<0.5); if(pos){const r=document.getElementById('mwrap').getBoundingClientRect();showHexPop(pos,ac,r.left+r.width/2,r.top+100);}}
+      };
+    }
+    el.appendChild(div);
+  }
+}
+
+// ═══════════════════════════════════════════════
+// HEX POPUP
+// ═══════════════════════════════════════════════
+function showHexPop(pos, ac, clientX, clientY) {
+  currentPopPos = pos; currentPopAC = ac;
+  const pop=document.getElementById('hexPop');
+  const wrap=document.getElementById('mwrap').getBoundingClientRect();
+  // Position near click, keep in bounds
+  let x=clientX-wrap.left+10, y=clientY-wrap.top-10;
+  if (x+340 > wrap.width) x=wrap.width-345;
+  if (y+280 > wrap.height) y=wrap.height-285;
+  if (y<10) y=10;
+  pop.style.left=x+'px'; pop.style.top=y+'px';
+
+  const vel = nearestVel(ac, pos.ts);
+  const velRows = !vel ? [['Velocity', 'No data within ±10s']]
+    : vel.type==='gs'
+      ? [['Ground Speed', vel.gs+' kt'],
+         ['Track (True)', vel.trk.toFixed(1)+'°'],
+         ['E-W Component', (vel.ew>=0?'+':'')+vel.ew+' kt '+(vel.ew>=0?'(East)':'(West)')],
+         ['N-S Component', (vel.ns>=0?'+':'')+vel.ns+' kt '+(vel.ns>=0?'(North)':'(South)')],
+         ['Vertical Rate', (vel.vr>=0?'+':'')+vel.vr+' fpm ('+vel.vrSrc+')'],
+         ['Climb / Desc', vel.vr>0?'Climbing':vel.vr<0?'Descending':'Level']]
+      : [['Heading', vel.hdg!=null?vel.hdg.toFixed(1)+'°':'—'],
+         [vel.asType, vel.as+' kt'],
+         ['Vertical Rate', (vel.vr>=0?'+':'')+vel.vr+' fpm ('+vel.vrSrc+')']];
+  const rows=[
+    ['ICAO', ac.icao],
+    ['Callsign', ac.callsign||'—'],
+    ['UTC Time', fmtT(pos.ts)],
+    ['Type Code', `TC=${pos.tc} (Airborne Position)`],
+    ['CPR Frame', pos.f===0?'Even (F=0)':'Odd (F=1)'],
+    ['CPR Lat', pos.cl],
+    ['CPR Lon', pos.co],
+    ['Latitude', pos.lat.toFixed(6)+'°'],
+    ['Longitude', pos.lon.toFixed(6)+'°'],
+    ['Altitude', pos.alt!=null?pos.alt+' ft':'Not encoded'],
+    ['CPR Mode', pos.mode==='local'?`Local (ref: ${refLbl})`:'Global paired'],
+    ...velRows,
+  ];
+  document.getElementById('hexRows').innerHTML = rows.map(([l,v])=>
+    `<div class="hpop-row"><span class="hpop-label">${l}</span><span class="hpop-val">${v}</span></div>`
+  ).join('');
+  const raw22 = pos.srcHex ? (pos.srcHex.length===28?pos.srcHex.slice(0,22):pos.srcHex) : '—';
+  document.getElementById('hexRaw').textContent = raw22 + (pos.srcHex&&pos.srcHex.length===28?' [+CRC]':'');
+  document.getElementById('hexCopyHint').textContent = 'Click hex to copy to clipboard';
+  pop.classList.add('vis');
+}
+
+function closeHexPop(){ document.getElementById('hexPop').classList.remove('vis'); }
+map.on('click', ()=>closeHexPop());
+
+function copyHex() {
+  let txt = document.getElementById('hexRaw').textContent;
+  if (!txt||txt==='—') return;
+  // Strip trailing 6-hex CRC if present (full frame = 28 chars, no-CRC = 22)
+  if (txt.length === 28) txt = txt.slice(0, 22);
+  navigator.clipboard.writeText(txt).then(()=>{
+    document.getElementById('hexCopyHint').textContent='✓ Copied (no CRC) to clipboard!';
+    setTimeout(()=>document.getElementById('hexCopyHint').textContent='Click hex to copy (CRC stripped)',2000);
+  }).catch(()=>{
+    const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
+    document.getElementById('hexCopyHint').textContent='✓ Copied (no CRC)!';
+    setTimeout(()=>document.getElementById('hexCopyHint').textContent='Click hex to copy (CRC stripped)',2000);
+  });
+}
+
+// ═══════════════════════════════════════════════
+// PLAYBACK — linear UTC time across ALL visible aircraft
+// Advances frame by frame in real UTC time.
+// When no position exists for an aircraft at current time,
+// it stays stationary at its last known position.
+// ═══════════════════════════════════════════════
+function setupPb() {
+  stopPb();
+  // Collect all positions from visible aircraft with positions
+  const visACs = Object.values(aircraft).filter(a=>a.positions.length&&visSet.has(a.icao));
+  if (!visACs.length) return;
+
+  // Build a unified timeline of unique timestamps from selected AC
+  const ac = aircraft[selICAO];
+  if (!ac || !ac.positions.length) return;
+  pbArr = ac.positions;
+  pbIdx = 0;
+
+  const sc=document.getElementById('scrub');
+  sc.max=pbArr.length-1; sc.value=0; sc.style.setProperty('--p','0%');
+  document.getElementById('pStart').textContent=fmtT(pbArr[0].ts);
+  document.getElementById('pEnd').textContent=fmtT(pbArr[pbArr.length-1].ts);
+  document.getElementById('ppct').textContent=`1 / ${pbArr.length}`;
+  document.getElementById('ptime').textContent=fmtT(pbArr[0].ts);
+  document.getElementById('pbar').classList.add('vis');
+
+  // Clear old playback markers
+  for (const l of Object.values(pbMarkers)) { try{map.removeLayer(l);}catch(e){} }
+  for (const l of Object.values(pbTrails)) { try{map.removeLayer(l);}catch(e){} }
+  pbMarkers={}; pbTrails={};
+  mkPbMkr(0);
+}
+
+function mkPbMkr(idx) {
+  if (!pbArr.length) return;
+  idx=Math.max(0,Math.min(pbArr.length-1,idx));
+  pbIdx=idx;
+  const p=pbArr[idx];
+  const ac=aircraft[selICAO];
+  const col=ac?.col||'#00ff88';
+
+  // Remove old marker
+  if (pbMarkers[selICAO]) { try{map.removeLayer(pbMarkers[selICAO]);}catch(e){} }
+  if (pbTrails[selICAO])  { try{map.removeLayer(pbTrails[selICAO]);}catch(e){} }
+
+  // Trail from start to current position
+  if (idx > 0) {
+    pbTrails[selICAO]=L.polyline(pbArr.slice(0,idx+1).map(x=>[x.lat,x.lon]),
+      {color:col,weight:3.5,opacity:1,interactive:false}).addTo(map);
+  }
+
+  // Animated dot
+  const ic=L.divIcon({
+    html:`<div style="position:relative;width:0;height:0"><div style="position:absolute;transform:translate(-50%,-50%);width:14px;height:14px;border-radius:50%;background:${col};border:2px solid #fff;box-shadow:0 0 10px ${col},0 0 20px ${col}55"></div></div>`,
+    className:'',iconSize:[0,0],iconAnchor:[0,0]});
+  pbMarkers[selICAO]=L.marker([p.lat,p.lon],{icon:ic,zIndexOffset:1000,interactive:false}).addTo(map);
+
+  // Update controls
+  const sc=document.getElementById('scrub');
+  sc.value=idx;
+  sc.style.setProperty('--p',((idx/(pbArr.length-1))*100).toFixed(1)+'%');
+  document.getElementById('ptime').textContent=fmtT(p.ts);
+  document.getElementById('ppct').textContent=`${idx+1} / ${pbArr.length}`;
+  hudUpd(p, aircraft[selICAO]);
+}
+
+function togglePlay() { if(pbPlay)stopPb();else startPb(); }
+
+function startPb() {
+  if (pbIdx>=pbArr.length-1) pbIdx=0;
+  pbPlay=true;
+  document.getElementById('playbtn').textContent='⏸ PAUSE';
+  document.getElementById('playbtn').classList.add('going');
+  stepPb();
+}
+
+function stepPb() {
+  if (!pbPlay || pbIdx>=pbArr.length-1) {
+    if (pbIdx>=pbArr.length-1) stopPb();
+    return;
+  }
+  const now=pbArr[pbIdx], nxt=pbArr[pbIdx+1];
+  // Linear UTC time: wait exactly (dt/speed) ms then advance
+  const realDt=(nxt.ts-now.ts)*1000; // real seconds between frames → ms
+  const waitMs=Math.max(50, realDt/pbSpd);
+  mkPbMkr(pbIdx+1);
+  pbTimer=setTimeout(stepPb, waitMs);
+}
+
+function stopPb() {
+  pbPlay=false;
+  if (pbTimer){clearTimeout(pbTimer);pbTimer=null;}
+  document.getElementById('playbtn').textContent='▶ PLAY';
+  document.getElementById('playbtn').classList.remove('going');
+}
+
+function resetPb(){ stopPb(); mkPbMkr(0); }
+
+function onScrub(el) {
+  stopPb();
+  const idx=parseInt(el.value);
+  el.style.setProperty('--p',((idx/(pbArr.length-1))*100).toFixed(1)+'%');
+  mkPbMkr(idx);
+}
+
+function setSpd(s,btn) {
+  pbSpd=s;
+  document.querySelectorAll('.spd').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+}
+
+// ═══════════════════════════════════════════════
+// REF MODAL
+// ═══════════════════════════════════════════════
+let fromLoad=false;
+function showRef(fl=false){
+  fromLoad=fl;
+  document.getElementById('refOv').classList.add('vis');
+}
+function hideOv(id){ document.getElementById(id).classList.remove('vis'); }
+
+async function applyRef() {
+  const lat=parseFloat(document.getElementById('rlat').value);
+  const lon=parseFloat(document.getElementById('rlon').value);
+  const lbl=(document.getElementById('rlbl').value.trim())||'CUSTOM';
+  if (isNaN(lat)||isNaN(lon)){alert('Please enter valid coordinates or select an airport.');return;}
+  refLat=lat; refLon=lon; refLbl=lbl;
+  hideOv('refOv');
+  pill('pRef',`REF: ${lbl}`,false);
+  if (fromLoad && pendingFiles) {
+    await processFiles(pendingFiles);
+    pendingFiles=null;
+  } else if (Object.keys(aircraft).length) {
+    load(true,'REPROCESSING CPR'); await sleep(40);
+    await buildAC(); renderAll(); load(false);
+  }
+}
+
+// ═══════════════════════════════════════════════
+// UI HELPERS
+// ═══════════════════════════════════════════════
+function swTab(name){
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('on',['data','aircraft','log'][i]===name));
+  document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.id===`pn-${name}`));
+}
+function load(v,txt=''){
+  document.getElementById('loading').classList.toggle('vis',v);
+  if(txt)document.getElementById('ltxt').textContent=txt;
+}
+function pill(id,txt,lit){
+  const el=document.getElementById(id);
+  if(!el)return; el.textContent=txt;
+  if(lit!==undefined)el.classList.toggle('lit',lit);
+}
+
+// ═══════════════════════════════════════════════
+// DELETE & EXPORT
+// ═══════════════════════════════════════════════
+
+// Track which point the hex popup is showing
+let currentPopPos = null;
+let currentPopAC = null;
+
+// currentPopPos/AC set directly in showHexPop
+
+function deleteCurrentPoint() {
+  if (!currentPopPos || !currentPopAC) return;
+  const icao = currentPopAC.icao;
+  const ac = aircraft[icao];
+  if (!ac) return;
+  const ts = currentPopPos.ts;
+  // Remove from positions array
+  ac.positions = ac.positions.filter(p => p.ts !== ts);
+  // Remove from allMsgs (both rawMsgs and ac.allMsgs)
+  rawMsgs = rawMsgs.filter(m => !(m.icao===icao && Math.abs(m.ts-ts)<0.5));
+  ac.allMsgs = ac.allMsgs.filter(m => Math.abs(m.ts-ts) >= 0.5);
+  currentPopPos = null;
+  closeHexPop();
+  // Redraw
+  renderAllNoZoom();
+  updatePanel(ac);
+  renderLog();
+}
+
+function deleteAircraft(icao) {
+  if (!confirm(`Remove aircraft ${icao} (${aircraft[icao]?.callsign||''}) from the dataset?
+This cannot be undone.`)) return;
+  // Remove from rawMsgs
+  rawMsgs = rawMsgs.filter(m => m.icao !== icao);
+  // Remove layers from map
+  if (trkLayers[icao]) { map.removeLayer(trkLayers[icao]); delete trkLayers[icao]; }
+  if (mkrLayers[icao]) { map.removeLayer(mkrLayers[icao]); delete mkrLayers[icao]; }
+  if (dotLayers[icao]) { map.removeLayer(dotLayers[icao]); delete dotLayers[icao]; }
+  visSet.delete(icao);
+  delete aircraft[icao];
+  if (selICAO === icao) selICAO = null;
+  renderACList();
+  renderLog();
+  // Update counts
+  const tp = Object.values(aircraft).reduce((s,a)=>s+a.positions.length,0);
+  document.getElementById('sbP').textContent = tp;
+  pill('pPos',`POSITIONS: ${tp}`,false);
+  document.getElementById('sbA').textContent = Object.keys(aircraft).length;
+  pill('pAC',`AIRCRAFT: ${Object.keys(aircraft).length}`,false);
+}
+
+// renderAll without zooming to bounds (used after point deletion)
+function renderAllNoZoom() {
+  for (const l of Object.values(trkLayers)) map.removeLayer(l);
+  for (const l of Object.values(mkrLayers)) map.removeLayer(l);
+  for (const l of Object.values(dotLayers)) map.removeLayer(l);
+  trkLayers={}; mkrLayers={}; dotLayers={};
+
+  for (const [icao,ac] of Object.entries(aircraft)) {
+    if (!ac.positions.length) continue;
+    const col = ac.col || COLS[0];
+    if (!visSet.has(icao)) continue;
+
+    const lls = ac.positions.map(p=>[p.lat,p.lon]);
+    const gl = L.polyline(lls,{color:col,weight:8,opacity:.1,interactive:false});
+    const ln = L.polyline(lls,{color:col,weight:2,opacity:.85});
+    ln.on('click', e => {
+      const nearest = nearestPoint(ac.positions, e.latlng);
+      if (nearest) showHexPop(nearest, ac, e.originalEvent.clientX, e.originalEvent.clientY);
+      selAC(icao, true);
+    });
+    trkLayers[icao] = L.layerGroup([gl,ln]).addTo(map);
+
+    if (!ac.positions.length) continue;
+    const s=ac.positions[0], end=ac.positions[ac.positions.length-1];
+    const sm=L.circleMarker([s.lat,s.lon],{radius:5,fillColor:col,color:'#fff',weight:1.5,fillOpacity:.9})
+      .on('click',()=>selAC(icao,true));
+    const triIc=L.divIcon({html:catSymbolSVG(ac.tcs,ac.cat,col,22,0),className:'',iconSize:[22,22],iconAnchor:[11,11]});
+    const em=L.marker([end.lat,end.lon],{icon:triIc}).on('click',()=>selAC(icao,true));
+
+    const dotGroup=L.layerGroup();
+    for (const pos of ac.positions) {
+      const dot=L.circleMarker([pos.lat,pos.lon],{radius:3,fillColor:col,color:'transparent',fillOpacity:.6,interactive:true});
+      dot.on('click',e=>{
+        showHexPop(pos,ac,e.originalEvent.clientX,e.originalEvent.clientY);
+        selAC(icao,true);
+        L.DomEvent.stopPropagation(e);
+      });
+      dotGroup.addLayer(dot);
+    }
+    dotLayers[icao]=dotGroup.addTo(map);
+    mkrLayers[icao]=L.layerGroup([sm,em]).addTo(map);
+  }
+
+  renderACList();
+  if (selICAO && aircraft[selICAO]) {
+    updatePanel(aircraft[selICAO]);
+    setupPb();
+  }
+}
+
+function exportData() {
+  // Build output: reconstruct original format for all remaining messages
+  // Format per original file: HEX ; TIMESTAMP ; label ; col4
+  // We keep original raw line data, filtered to only remaining aircraft/positions
+  const remainICAOs = new Set(Object.keys(aircraft));
+
+  // Rebuild from rawMsgs (already filtered by delete operations)
+  // rawMsgs contains parsed objects; we stored original hex in m.h
+  // We need to reconstruct the original line format
+  const lines = [];
+  for (const m of rawMsgs) {
+    if (!m.icao || !remainICAOs.has(m.icao)) continue;
+    // Skip position messages that were deleted (check against ac.positions)
+    if (m.type === 'pos') {
+      const ac = aircraft[m.icao];
+      if (!ac) continue;
+      // Check if this timestamp still exists in positions or allMsgs
+      const kept = ac.allMsgs.some(am => Math.abs(am.ts - m.ts) < 0.01);
+      if (!kept) continue;
+    }
+    // Reconstruct line: original hex ; timestamp ; label
+    const ts = m.ts.toFixed(3);
+    lines.push(`${m.h} ; ${ts} ; edited ; 0`);
+  }
+
+  if (!lines.length) { alert('No data to export.'); return; }
+
+  const blob = new Blob([lines.join('\n')], {type:'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const now = new Date();
+  const stamp = [now.getUTCHours(),now.getUTCMinutes(),now.getUTCSeconds()].map(v=>String(v).padStart(2,'0')).join('');
+  a.download = `ADSB_edited_${stamp}Z.txt`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+</script>
+</body>
+</html>
