@@ -214,6 +214,43 @@ footer b{color:var(--text);font-weight:400}
 </style>
 </head>
 <body>
+  <!-- ===== back button - paste directly after <body> ===== -->
+<!-- position:absolute means it sits at the top of the page and scrolls away
+     with it, rather than staying pinned over the content. -->
+<style>
+  body{padding-top:64px}
+  .nav-back{
+    position:absolute;top:calc(12px + env(safe-area-inset-top));
+    left:calc(12px + env(safe-area-inset-left));z-index:9999;
+    display:inline-flex;align-items:center;gap:7px;
+    min-height:40px;padding:0 15px;box-sizing:border-box;
+    background:#20272f;border:1px solid #2b333c;border-radius:2px;
+    color:#e2e8ee;text-decoration:none;
+    font-family:system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:14px;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .nav-back:hover{border-color:#ffc233;color:#ffc233}
+  .nav-back:focus-visible{outline:2px solid #ffc233;outline-offset:2px}
+  .nav-back span{font-size:17px;line-height:1}
+  @media (pointer:coarse){.nav-back{min-height:48px;font-size:16px}body{padding-top:76px}}
+</style>
+<a class="nav-back" id="nav-back" href="index.html"><span>&#8592;</span> Back</a>
+<script>
+  (function(){
+    var HUB = "index.html";                    // page to fall back to
+    var a = document.getElementById("nav-back");
+    a.setAttribute("href", HUB);
+    a.addEventListener("click", function(ev){
+      var sameSite = document.referrer &&
+                     new URL(document.referrer).origin === location.origin;
+      if (sameSite && history.length > 1){     // came from the hub: go back
+        ev.preventDefault();
+        history.back();
+      }                                        // otherwise the href takes over
+    });
+  })();
+</script>
+<!-- ===== end back button ===== -->
 <div class="wrap">
 
 <p class="notice" id="notice" hidden></p>
