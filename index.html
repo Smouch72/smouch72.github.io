@@ -1,69 +1,404 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smouch's App Library</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: #f4f7f6;
-            margin: 0;
-            padding: 40px 20px;
-            display: flex;
-            justify-content: center;
-        }
-        .hub-container {
-            background: white;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            width: 100%;
-            max-width: 450px;
-            text-align: center;
-        }
-        h1 { margin-top: 0; color: #1f2937; }
-        .links-list {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            margin-top: 20px;
-        }
-        .app-link {
-            display: block;
-            padding: 15px;
-            background: #2563eb;
-            color: white;
-            text-decoration: none;
-            border-radius: 8px;
-            font-weight: 600;
-            transition: background 0.2s;
-        }
-        .app-link:hover {
-            background: #1d4ed8;
-        }
-        .app-link.secondary {
-            background: #4b5563;
-        }
-        .app-link.secondary:hover {
-            background: #374151;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smouch72 — Radar &amp; RF Test Suite</title>
+<meta name="description" content="A small suite of radar and RF testing tools: GPS range/bearing calculator, RF dBm calculator, Mode C encoder and ADS-B tracker.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#050e0c;
+    --bg-panel:#0b1a17;
+    --bg-panel-hi:#0f231e;
+    --line:#1d3a33;
+    --line-soft:#12241f;
+    --green:#5df2ae;
+    --green-dim:#2f7a5c;
+    --amber:#ffb454;
+    --text:#e7f5ef;
+    --text-dim:#7fa89b;
+    --font-display:'Rajdhani', sans-serif;
+    --font-mono:'IBM Plex Mono', monospace;
+  }
+
+  *{ box-sizing:border-box; }
+
+  html{ scroll-behavior:smooth; }
+
+  body{
+    margin:0;
+    background:
+      radial-gradient(ellipse 120% 60% at 50% -10%, #0d211c 0%, var(--bg) 55%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--font-mono);
+    -webkit-font-smoothing:antialiased;
+    min-height:100vh;
+  }
+
+  /* faint scanline + grid texture over whole page */
+  body::before{
+    content:"";
+    position:fixed;
+    inset:0;
+    pointer-events:none;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(93,242,174,0.025) 0px, rgba(93,242,174,0.025) 1px, transparent 1px, transparent 3px);
+    z-index:1;
+  }
+
+  a{ color:inherit; }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration:0.001s !important; animation-iteration-count:1 !important; }
+  }
+
+  /* ---------- header bar ---------- */
+  .topbar{
+    position:relative;
+    z-index:2;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    max-width:920px;
+    margin:0 auto;
+    padding:22px 24px 0;
+    font-size:11px;
+    letter-spacing:0.08em;
+    color:var(--text-dim);
+  }
+  .topbar .status-dot{
+    display:inline-block;
+    width:6px; height:6px;
+    border-radius:50%;
+    background:var(--green);
+    box-shadow:0 0 6px var(--green);
+    margin-right:8px;
+    animation:blink 2.6s ease-in-out infinite;
+  }
+  @keyframes blink{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
+
+  /* ---------- hero ---------- */
+  .hero{
+    position:relative;
+    z-index:2;
+    max-width:920px;
+    margin:0 auto;
+    padding:36px 24px 12px;
+    text-align:center;
+  }
+
+  .scope-wrap{
+    position:relative;
+    width:min(66vw, 300px);
+    aspect-ratio:1;
+    margin:8px auto 0;
+  }
+
+  .scope-ring{
+    position:absolute; inset:0;
+    border-radius:50%;
+  }
+
+  .scope-bg{
+    position:absolute; inset:0;
+    border-radius:50%;
+    background:radial-gradient(circle at 50% 50%, #0c1f1a 0%, #081712 72%, #060f0d 100%);
+    border:1px solid var(--line);
+    box-shadow: inset 0 0 40px rgba(0,0,0,0.6), 0 0 50px rgba(93,242,174,0.05);
+  }
+
+  .scope-grid{ position:absolute; inset:0; }
+
+  .scope-sweep{
+    position:absolute; inset:0;
+    border-radius:50%;
+    /* leading edge (direction of rotation) sits at 60deg and is brightest;
+       brightness tapers backward toward 0deg, the trailing afterglow */
+    background:conic-gradient(from 0deg,
+      transparent 0deg,
+      rgba(93,242,174,0.03) 15deg,
+      rgba(93,242,174,0.14) 35deg,
+      rgba(93,242,174,0.4) 50deg,
+      rgba(93,242,174,0.9) 58deg,
+      rgba(93,242,174,1) 60deg,
+      transparent 60.5deg);
+    mix-blend-mode:screen;
+    animation:sweep 4.2s linear infinite;
+  }
+  @keyframes sweep{ to{ transform:rotate(360deg); } }
+
+  .blip{
+    position:absolute;
+    width:5px; height:5px;
+    border-radius:50%;
+    background:var(--green);
+    box-shadow:0 0 6px 1px var(--green);
+    animation:blip-fade 4.2s linear infinite;
+    opacity:0;
+  }
+  /* blip flashes at 0% of its own (delayed) cycle, which is timed so the
+     leading edge of the sweep is passing directly over it at that instant */
+  @keyframes blip-fade{
+    0%{ opacity:1; }
+    8%{ opacity:0.55; }
+    28%{ opacity:0.12; }
+    45%{ opacity:0; }
+    100%{ opacity:0; }
+  }
+
+  .brand{
+    margin:26px 0 6px;
+    font-family:var(--font-display);
+    font-weight:700;
+    font-size:clamp(30px, 6vw, 46px);
+    letter-spacing:0.01em;
+    line-height:1;
+  }
+  .brand .callsign-brackets{ color:var(--green); }
+
+  .tagline{
+    margin:0 auto;
+    max-width:480px;
+    color:var(--text-dim);
+    font-size:13px;
+    line-height:1.7;
+  }
+
+  .pulse-divider{
+    display:block;
+    width:min(100%, 420px);
+    height:46px;
+    margin:30px auto 6px;
+    opacity:0.9;
+  }
+
+  /* ---------- tool grid ---------- */
+  .tools{
+    position:relative;
+    z-index:2;
+    max-width:920px;
+    margin:0 auto;
+    padding:10px 24px 60px;
+    display:grid;
+    grid-template-columns:repeat(2, 1fr);
+    gap:18px;
+  }
+  @media (max-width:620px){
+    .tools{ grid-template-columns:1fr; }
+  }
+
+  .tool-card{
+    position:relative;
+    display:block;
+    text-decoration:none;
+    color:var(--text);
+    background:linear-gradient(180deg, var(--bg-panel-hi), var(--bg-panel));
+    border:1px solid var(--line-soft);
+    padding:22px 22px 20px;
+    transition:border-color 0.18s ease, transform 0.18s ease, background 0.18s ease;
+  }
+
+  /* corner-bracket HUD styling instead of rounded cards */
+  .tool-card::before, .tool-card::after,
+  .tool-card .bl, .tool-card .br{
+    content:"";
+    position:absolute;
+    width:14px; height:14px;
+    border:2px solid var(--green-dim);
+    transition:border-color 0.18s ease, width 0.18s ease, height 0.18s ease;
+  }
+  .tool-card::before{ top:-1px; left:-1px; border-right:none; border-bottom:none; }
+  .tool-card::after{ top:-1px; right:-1px; border-left:none; border-bottom:none; }
+  .tool-card .bl{ bottom:-1px; left:-1px; border-right:none; border-top:none; }
+  .tool-card .br{ bottom:-1px; right:-1px; border-left:none; border-top:none; }
+
+  .tool-card:hover{
+    background:linear-gradient(180deg, #123028, var(--bg-panel-hi));
+    transform:translateY(-2px);
+  }
+  .tool-card:hover::before, .tool-card:hover::after,
+  .tool-card:hover .bl, .tool-card:hover .br{
+    border-color:var(--green);
+    width:18px; height:18px;
+  }
+  .tool-card:focus-visible{ outline:2px solid var(--green); outline-offset:4px; }
+
+  .tool-icon{
+    width:34px; height:34px;
+    color:var(--green);
+    margin-bottom:16px;
+  }
+
+  .tool-name{
+    font-family:var(--font-display);
+    font-weight:600;
+    font-size:20px;
+    letter-spacing:0.01em;
+    margin:0 0 8px;
+  }
+
+  .tool-desc{
+    font-size:12.5px;
+    line-height:1.6;
+    color:var(--text-dim);
+    margin:0 0 18px;
+    max-width:36ch;
+  }
+
+  .tool-open{
+    font-size:11px;
+    letter-spacing:0.06em;
+    color:var(--amber);
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+  }
+  .tool-open .caret{ color:var(--green); }
+
+  /* ---------- footer ---------- */
+  footer{
+    position:relative;
+    z-index:2;
+    max-width:920px;
+    margin:0 auto;
+    padding:0 24px 40px;
+    text-align:center;
+    color:var(--text-dim);
+    font-size:11px;
+    letter-spacing:0.05em;
+    line-height:1.8;
+  }
+  footer .rule{
+    width:100%;
+    max-width:920px;
+    height:1px;
+    background:linear-gradient(90deg, transparent, var(--line), transparent);
+    margin:0 auto 22px;
+  }
+</style>
 </head>
 <body>
 
-    <div class="hub-container">
-        <h1>Smouch's App Library</h1>
-        <p>Select an application or page below:</p>
-        
-        <div class="links-list">
-            <!-- Relative links to your other HTML files -->
-            <a href="GPS_Calc.html" class="app-link">🌐 Open GPS Calculator</a>
-            <a href="radar-power-budget_Calc.html" class="app-link secondary">📡 Open RF dBm Calculator</a>
-            <a href="mode_c_encoder_calculator_2.html" class="app-link">⛄ Open Mode C Encoder</a>
-            <a href="adsb_tracker_11.html" class="app-link secondary">✈ Open ADS-B Tracker</a>
-        </div>
+  <div class="topbar">
+    <div><span class="status-dot"></span>STATUS: OPERATIONAL</div>
+    <div>SMOUCH72 / TEST SUITE</div>
+  </div>
+
+  <header class="hero">
+    <div class="scope-wrap" aria-hidden="true">
+      <div class="scope-bg"></div>
+      <svg class="scope-grid" viewBox="0 0 200 200">
+        <circle cx="100" cy="100" r="90" fill="none" stroke="#1d3a33" stroke-width="1"/>
+        <circle cx="100" cy="100" r="60" fill="none" stroke="#1d3a33" stroke-width="1"/>
+        <circle cx="100" cy="100" r="30" fill="none" stroke="#1d3a33" stroke-width="1"/>
+        <line x1="10" y1="100" x2="190" y2="100" stroke="#1d3a33" stroke-width="1"/>
+        <line x1="100" y1="10" x2="100" y2="190" stroke="#1d3a33" stroke-width="1"/>
+      </svg>
+      <div class="scope-sweep"></div>
+      <div class="blip" style="top:34%; left:62%; animation-delay:3.93s;"></div>
+      <div class="blip" style="top:68%; left:40%; animation-delay:1.74s;"></div>
+      <div class="blip" style="top:52%; left:74%; animation-delay:0.41s;"></div>
+      <div class="blip" style="top:25%; left:38%; animation-delay:3.20s;"></div>
     </div>
+
+    <h1 class="brand"><span class="callsign-brackets">[</span>SMOUCH's<span class="callsign-brackets">]</span> APP LIBRARY</h1>
+    <p class="tagline">A small selection of radar &amp; RF testing tools — range and bearing, power budgets, transponder encoding and ADS-B recording analysis. Select a tool below.</p>
+
+    <svg class="pulse-divider" viewBox="0 0 420 46" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+      <!-- reserved / spare bit position, shown as a dashed box like a real IFF reply chart -->
+      <rect x="218" y="20" width="14" height="18" fill="none" stroke="#7fa89b" stroke-width="1" stroke-dasharray="2 2"/>
+
+      <polyline points="0,38 8,38 8,20 22,20 22,38 30,38 38,38 38,20 52,20 52,38 60,38 90,38 98,38 98,20 112,20 112,38
+                         120,38 128,38 128,20 142,20 142,38 150,38 180,38 188,38 188,20 202,20 202,38 210,38 240,38
+                         248,38 248,20 262,20 262,38 270,38 300,38 308,38 308,20 322,20 322,38 330,38 338,38 338,20
+                         352,20 352,38 360,38 390,38 398,38 398,20 412,20 412,38 420,38"
+        fill="none" stroke="#ffb454" stroke-width="1.8" stroke-linejoin="miter" stroke-linecap="butt"/>
+
+      <g font-family="'IBM Plex Mono', monospace" font-size="6.5" text-anchor="middle">
+        <text x="15" y="9" fill="#ffb454" font-weight="600">F1</text>
+        <text x="45" y="9" fill="#7fa89b">C1</text>
+        <text x="75" y="9" fill="#7fa89b">A1</text>
+        <text x="105" y="9" fill="#7fa89b">C2</text>
+        <text x="135" y="9" fill="#7fa89b">A2</text>
+        <text x="165" y="9" fill="#7fa89b">C4</text>
+        <text x="195" y="9" fill="#7fa89b">A4</text>
+        <text x="225" y="9" fill="#7fa89b">X</text>
+        <text x="255" y="9" fill="#7fa89b">B1</text>
+        <text x="285" y="9" fill="#7fa89b">D1</text>
+        <text x="315" y="9" fill="#7fa89b">B2</text>
+        <text x="345" y="9" fill="#7fa89b">D2</text>
+        <text x="375" y="9" fill="#7fa89b">D4</text>
+        <text x="405" y="9" fill="#ffb454" font-weight="600">F2</text>
+      </g>
+    </svg>
+  </header>
+
+  <main class="tools">
+
+    <a class="tool-card" href="gps_calc.html">
+      <span class="bl"></span><span class="br"></span>
+      <svg class="tool-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.6">
+        <circle cx="20" cy="20" r="15"/>
+        <circle cx="20" cy="20" r="1.6" fill="currentColor" stroke="none"/>
+        <line x1="20" y1="2" x2="20" y2="9"/>
+        <line x1="20" y1="31" x2="20" y2="38"/>
+        <line x1="2" y1="20" x2="9" y2="20"/>
+        <line x1="31" y1="20" x2="38" y2="20"/>
+        <line x1="20" y1="20" x2="29" y2="12" stroke-dasharray="2 2"/>
+        <circle cx="29" cy="12" r="1.8" fill="currentColor" stroke="none"/>
+      </svg>
+      <h2 class="tool-name">GPS Range / Bearing</h2>
+      <p class="tool-desc">Great-circle range and bearing between two coordinate pairs.</p>
+      <span class="tool-open"><span class="caret">&gt;</span> OPEN CALCULATOR</span>
+    </a>
+
+    <a class="tool-card" href="radar-power-budget_Calc.html">
+      <span class="bl"></span><span class="br"></span>
+      <svg class="tool-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.6">
+        <path d="M3 24 L10 24 L13 12 L18 32 L22 18 L25 24 L37 24" stroke-linejoin="round" stroke-linecap="round"/>
+      </svg>
+      <h2 class="tool-name">RF dBm Calculator</h2>
+      <p class="tool-desc">Calculate power, gain and path loss for far field RF Power checks.</p>
+      <span class="tool-open"><span class="caret">&gt;</span> OPEN CALCULATOR</span>
+    </a>
+
+    <a class="tool-card" href="mode_c_encoder_calculator_2.html">
+      <span class="bl"></span><span class="br"></span>
+      <svg class="tool-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.6">
+        <rect x="5" y="12" width="30" height="16" rx="0.5"/>
+        <line x1="11" y1="16" x2="11" y2="24"/>
+        <line x1="17" y1="16" x2="17" y2="24"/>
+        <line x1="23" y1="16" x2="23" y2="24"/>
+        <line x1="29" y1="16" x2="29" y2="24"/>
+        <line x1="14" y1="6" x2="14" y2="12"/>
+        <line x1="26" y1="6" x2="26" y2="12"/>
+      </svg>
+      <h2 class="tool-name">Mode C Encoder</h2>
+      <p class="tool-desc">Encode Mode C altitude Gillham Code values for transponder bench testing.</p>
+      <span class="tool-open"><span class="caret">&gt;</span> OPEN ENCODER</span>
+    </a>
+
+    <a class="tool-card" href="adsb_tracker_11.html">
+      <span class="bl"></span><span class="br"></span>
+      <svg class="tool-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.6">
+        <path d="M4 22 L16 20 L24 8 L27 8 L22 20.5 L34 19 L36 22 L22 23.5 L24 32 L21 32 L17 24 L6 25 Z" stroke-linejoin="round"/>
+        <path d="M8 27 Q20 34 33 26" stroke-dasharray="1.5 3" stroke-linecap="round"/>
+      </svg>
+      <h2 class="tool-name">ADS-B Tracker</h2>
+      <p class="tool-desc">ADS-B target tracking and display for recorded ADS-B Squitter traffic.</p>
+      <span class="tool-open"><span class="caret">&gt;</span> OPEN TRACKER</span>
+    </a>
+
+  </main>
+
+  <footer>
+    <div class="rule"></div>
+    <div>SMOUCH72.GITHUB.IO — RADAR &amp; RF TEST TOOLS</div>
+  </footer>
 
 </body>
 </html>
