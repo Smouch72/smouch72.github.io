@@ -351,12 +351,14 @@ footer b{color:var(--text);font-weight:400}
   <pre class="preview" id="plot-preview">—</pre>
   <div class="bar">
     <button class="btn" id="export-plot">Export co-ords</button>
+    <button class="btn" id="email-plot">Email co-ords</button>
     <a class="btn link" id="open-plotter" href="https://geojson.io"
        target="_blank" rel="noopener noreferrer">Open geojson.io</a>
   </div>
   <p class="hint" id="plot-hint">Export writes a GeoJSON .txt file to your downloads — both points plus the
-     track between them. Open geojson.io and drag the file onto the map. The site needs an internet
-     connection; everything else here works offline.</p>
+     track between them. Email co-ords sends the same data with the geojson.io link at the top. Open
+     geojson.io and drag the file onto the map, or paste the JSON into its editor pane. The site needs an
+     internet connection; everything else here works offline.</p>
 
   <div id="json-panel" hidden>
     <textarea id="json-text" readonly spellcheck="false" aria-label="GeoJSON output for copying"></textarea>
@@ -647,7 +649,7 @@ function plotLines(){
 function renderPlot(){
   const lines = plotLines();
   $("#plot-preview").textContent = lines ? lines.join("\n") : "\u2014";
-  ["#export-plot", "#export-word", "#save-image", "#copy-log", "#email"].forEach(sel => {
+  ["#export-plot", "#email-plot", "#export-word", "#save-image", "#copy-log", "#email"].forEach(sel => {
     const b = $(sel);
     b.disabled = !lines;
     b.style.opacity = lines ? "1" : ".5";
@@ -1299,16 +1301,122 @@ function resultsText(){
   return t;
 }
 
-function emailResults(btn){
-  if (!last) return;
-  const subject = `${shipName()} \u2013 range & bearing to ${SITE_NAME}`;
-  const body = resultsText() + "\nGenerated " + new Date().toLocaleString()
-             + "\nSpherical earth R = 6371 km; bearings true, not magnetic.";
+const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+/* Canvas -> Blob without a callback. navigator.share() must be reached inside
+   the same task as the tap or iOS rejects it for lack of user activation, so
+   everything the email buttons do has to be synchronous up to the share call. */
+function canvasToBlobSync(cv, mime, quality){
+  const url = cv.toDataURL(mime || "image/jpeg", quality === undefined ? 0.92 : quality);
+  const bin = atob(url.split(",")[1]);
+  const buf = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  return new Blob([buf], { type: mime || "image/jpeg" });
+}
+
+function downloadBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.rel = "noopener";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+function openMail(subject, body){
   window.location.href = "mailto:?subject=" + encodeURIComponent(subject)
                        + "&body=" + encodeURIComponent(body);
-  const old = btn.textContent;
-  btn.textContent = "Opening Mail\u2026";
-  setTimeout(() => { btn.textContent = old; }, 2000);
+}
+
+function flashBtn(btn, text, ms){
+  const old = btn.dataset.label || btn.textContent;
+  btn.dataset.label = old;
+  btn.textContent = text;
+  setTimeout(() => { btn.textContent = old; }, ms || 2400);
+}
+
+/* ---- one email carrying the readings, the Word table and the screen image ----
+   mailto: cannot carry attachments, so where the browser supports sharing files
+   (iOS, Android, and Chrome/Edge on Windows) the files go to the share sheet and
+   you pick Mail from there. Elsewhere both files are saved and the mail opens
+   with the readings in the body, ready for you to attach them. */
+function emailResults(btn){
+  if (!last) return;
+  const d = wordValues();
+  if (!d) return;
+
+  const subject = `${shipName()} \u2013 range & bearing to ${SITE_NAME}`;
+  const body = resultsText()
+             + "\nGenerated " + new Date().toLocaleString()
+             + "\nSpherical earth R = 6371 km; bearings true, not magnetic.";
+
+  const docxName = `${safeName(shipName())}_readings_${stamp()}.docx`;
+  const imgName  = `${safeName(shipName())}_range_${stamp()}.jpg`;
+
+  let files = [];
+  try {
+    files = [
+      new File([buildDocx(d)], docxName, { type: DOCX_MIME }),
+      new File([canvasToBlobSync(drawRecordCard())], imgName, { type: "image/jpeg" })
+    ];
+  } catch (_) { files = []; }
+
+  if (files.length === 2 && navigator.canShare && navigator.canShare({ files })){
+    navigator.share({ title: subject, text: body, files })
+      .then(() => flashBtn(btn, "Sent to Mail"))
+      .catch(err => {
+        if (!err || err.name !== "AbortError"){       // sharing refused: fall back
+          files.forEach(f => downloadBlob(f, f.name));
+          openMail(subject, body + "\n\nThe Word table and screen image have been saved to "
+                                 + "your downloads \u2014 attach them to this message.");
+          flashBtn(btn, "Files saved \u2014 attach them");
+        }
+      });
+    return;
+  }
+
+  files.forEach(f => downloadBlob(f, f.name));
+  openMail(subject, body + "\n\nThe Word table and screen image have been saved to your "
+                         + "downloads \u2014 attach them to this message.");
+  flashBtn(btn, "Files saved \u2014 attach them");
+}
+
+/* ---- email the plotting co-ordinates, with the geojson.io link on top ----
+   Same two routes as Email results: share the file where the browser can, and
+   otherwise save it to downloads so there is always something to attach. The
+   JSON also goes in the body, but long mailto bodies get truncated by some mail
+   clients, so the attached file is the reliable copy. */
+function emailCoords(btn){
+  const gj = buildGeoJSON();
+  if (!gj) return;
+
+  const text = JSON.stringify(gj, null, 4);
+  const name = `${safeName(shipName())}_to_${safeName(SITE_NAME)}.txt`;
+  const subject = `${shipName()} \u2013 plotting co-ordinates for ${SITE_NAME}`;
+  const intro = "Plot these co-ordinates at https://geojson.io\n\n"
+              + "Open that link, then either drag the attached file onto the map or paste the\n"
+              + "GeoJSON below into the editor pane on the right-hand side. It plots as you paste.\n\n"
+              + "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\n";
+  const body = intro + text;
+
+  const blob = new Blob([text], { type:"application/json" });
+  let files = [];
+  try { files = [new File([blob], name, { type:"application/json" })]; } catch (_) { files = []; }
+
+  const saveAndMail = () => {
+    downloadBlob(blob, name);
+    openMail(subject, body + "\n\n" + name + " has been saved to your downloads \u2014 "
+                           + "attach it to this message.");
+    flashBtn(btn, "File saved \u2014 attach it");
+  };
+
+  if (files.length && navigator.canShare && navigator.canShare({ files })){
+    navigator.share({ title: subject, text: body, files })
+      .then(() => flashBtn(btn, "Sent to Mail"))
+      .catch(err => { if (!err || err.name !== "AbortError") saveAndMail(); });
+    return;
+  }
+
+  saveAndMail();
 }
 
 /* ---- take the test site position from the phone's own GPS ---- */
@@ -1458,6 +1566,7 @@ function init(){
   });
 
   $("#export-plot").addEventListener("click", e => exportGeoJSON(e.target));
+  $("#email-plot").addEventListener("click", e => emailCoords(e.target));
   $("#copy-json").addEventListener("click", e => copyText($("#json-text").value, e.target));
   $("#json-text").addEventListener("focus", e => e.target.select());
   $("#json-text").addEventListener("click", e => e.target.select());
