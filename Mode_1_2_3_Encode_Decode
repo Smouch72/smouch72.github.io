@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mode 1 / 2 / 3-A identity encoder / decoder — pulse train tool</title>
+<style>
+  :root{
+    --bg:#12161a;
+    --panel:#1a2027;
+    --panel-2:#20272f;
+    --border:#2b333c;
+    --amber:#ffb300;
+    --amber-dim:#5a4420;
+    --text:#c7ceD4;
+    --text-dim:#7c8894;
+    --danger:#e2574c;
+    --danger-dim:#4a2320;
+    --ok:#4caf7d;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    display:flex;
+    justify-content:center;
+    padding:76px 16px 32px;
+  }
+  .back-bar{
+    position:fixed;
+    top:0;
+    left:0;
+    right:0;
+    height:52px;
+    background:var(--panel);
+    border-bottom:1px solid var(--border);
+    display:flex;
+    align-items:center;
+    padding:0 16px;
+    z-index:100;
+  }
+  .back-btn{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    color:var(--text);
+    font-size:13px;
+    font-weight:600;
+    font-family:inherit;
+    padding:8px 14px;
+    border-radius:8px;
+    cursor:pointer;
+  }
+  .back-btn:hover{
+    border-color:var(--amber);
+    color:var(--amber);
+  }
+  .back-btn svg{
+    width:14px;
+    height:14px;
+    flex-shrink:0;
+  }
+  .panel{
+    width:100%;
+    max-width:460px;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:24px 24px 28px;
+  }
+  .eyebrow{
+    font-size:11px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    margin:0 0 2px;
+  }
+  h1{
+    font-size:18px;
+    font-weight:600;
+    margin:0 0 4px;
+    color:#e8ebee;
+  }
+  .sub{
+    font-size:13px;
+    color:var(--text-dim);
+    margin:0 0 18px;
+    line-height:1.5;
+  }
+  .mode-row{
+    display:flex;
+    gap:6px;
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    border-radius:9px;
+    padding:4px;
+    margin-bottom:22px;
+  }
+  .mode-btn{
+    flex:1;
+    background:transparent;
+    border:none;
+    color:var(--text-dim);
+    font-size:12px;
+    font-weight:600;
+    letter-spacing:.02em;
+    padding:8px 4px;
+    border-radius:6px;
+    cursor:pointer;
+    font-family:inherit;
+  }
+  .mode-btn.active{
+    background:var(--amber-dim);
+    color:var(--amber);
+  }
+  .mode-btn:not(.active):hover{
+    color:var(--text);
+  }
+  label{
+    display:block;
+    font-size:12px;
+    color:var(--text-dim);
+    margin-bottom:6px;
+  }
+  .input-row{
+    display:flex;
+    gap:10px;
+    margin-bottom:8px;
+  }
+  input.digit{
+    flex:1;
+    min-width:0;
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    color:#e8ebee;
+    font-size:26px;
+    font-weight:700;
+    text-align:center;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    padding:10px 4px;
+    border-radius:8px;
+    outline:none;
+  }
+  input.digit:focus{
+    border-color:var(--amber);
+  }
+  input.digit.err{
+    border-color:var(--danger);
+    color:var(--danger);
+  }
+  input.digit.hidden-digit{
+    display:none;
+  }
+  .digit-hints{
+    display:flex;
+    gap:10px;
+    margin-bottom:20px;
+  }
+  .digit-hints span{
+    flex:1;
+    text-align:center;
+    font-size:10px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+  }
+  .digit-hints span.hidden-digit{
+    display:none;
+  }
+  .readout{
+    background:#0c0f12;
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:18px 20px;
+    text-align:center;
+    margin-bottom:10px;
+  }
+  .readout-label{
+    font-size:11px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    margin-bottom:8px;
+  }
+  .readout-code{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:44px;
+    font-weight:700;
+    letter-spacing:.14em;
+    color:var(--amber);
+    line-height:1;
+    user-select:all;
+    -webkit-user-select:all;
+    cursor:pointer;
+  }
+  .readout-code.special{
+    color:var(--danger);
+  }
+  .special-note{
+    font-size:12px;
+    color:var(--danger);
+    margin-top:8px;
+    min-height:14px;
+  }
+  .meta{
+    font-size:12px;
+    color:var(--text-dim);
+    text-align:center;
+    margin-bottom:18px;
+    min-height:16px;
+  }
+  .meta b{color:var(--text);font-weight:600;}
+  button.copy{
+    width:100%;
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    color:var(--text);
+    font-size:13px;
+    padding:9px;
+    border-radius:8px;
+    cursor:pointer;
+    margin-bottom:22px;
+  }
+  button.copy:hover{border-color:var(--amber);color:var(--amber);}
+  button.copy:disabled{opacity:.4;cursor:default;}
+  .bits-title{
+    font-size:11px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    margin-bottom:10px;
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    gap:8px;
+  }
+  .bits-title .hint{
+    text-transform:none;
+    letter-spacing:0;
+    font-size:11px;
+    color:var(--text-dim);
+    font-style:italic;
+  }
+  .pulse-wrap{
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:8px 6px 6px;
+    margin-bottom:20px;
+  }
+  .pulse-wrap svg{
+    display:block;
+    width:100%;
+    height:auto;
+  }
+  .pulse-label{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:9px;
+    fill:var(--text-dim);
+    pointer-events:none;
+  }
+  .pulse-label.frame{
+    fill:var(--amber);
+  }
+  .pulse-label.spare{
+    fill:var(--text-dim);
+    font-style:italic;
+  }
+  .pulse-label.unused{
+    opacity:.4;
+  }
+  .pulse-baseline{
+    stroke:var(--border);
+    stroke-width:1;
+  }
+  .pulse-path{
+    fill:none;
+    stroke:var(--amber);
+    stroke-width:2.5;
+    stroke-linejoin:miter;
+    stroke-linecap:square;
+    pointer-events:none;
+  }
+  .pulse-spare-outline{
+    fill:none;
+    stroke:var(--text-dim);
+    stroke-width:1;
+    stroke-dasharray:2,2;
+    pointer-events:none;
+  }
+  .pulse-unused-outline{
+    fill:none;
+    stroke:var(--text-dim);
+    stroke-width:1;
+    stroke-dasharray:1,2;
+    opacity:.35;
+    pointer-events:none;
+  }
+  .pulse-hit{
+    fill:transparent;
+    cursor:pointer;
+  }
+  .pulse-hit:hover{
+    fill:rgba(255,179,0,0.08);
+  }
+  .pulse-hit.fixed{
+    cursor:default;
+  }
+  .pulse-hit.fixed:hover{
+    fill:transparent;
+  }
+  .digit-table{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:8px;
+    margin-bottom:20px;
+  }
+  .digit-cell{
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:8px 6px;
+    text-align:center;
+  }
+  .digit-cell.hidden-digit{
+    display:none;
+  }
+  .digit-cell .letter{
+    font-size:10px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--text-dim);
+    margin-bottom:4px;
+  }
+  .digit-cell .bits{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:12px;
+    color:var(--text);
+  }
+  .digit-cell .val{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:16px;
+    font-weight:700;
+    color:var(--amber);
+    margin-top:2px;
+  }
+  .footnote{
+    font-size:11px;
+    color:var(--text-dim);
+    margin-top:4px;
+    line-height:1.6;
+    border-top:1px solid var(--border);
+    padding-top:14px;
+  }
+  .footnote code{
+    color:var(--text);
+    background:var(--panel-2);
+    padding:1px 4px;
+    border-radius:4px;
+  }
+</style>
+</head>
+<body>
+<div class="back-bar">
+  <button class="back-btn" id="backBtn" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    Back
+  </button>
+</div>
+<div class="panel">
+  <p class="eyebrow" id="eyebrow">Mode 3/A · ATCRBS</p>
+  <h1>IFF identity code encoder / decoder</h1>
+  <p class="sub" id="subtext">Enter a code to build the reply pulse train, or click any data pulse in the train to toggle it — the code decodes live either way.</p>
+
+  <div class="mode-row" id="modeRow">
+    <button class="mode-btn" data-mode="M1">Mode 1</button>
+    <button class="mode-btn" data-mode="M2">Mode 2</button>
+    <button class="mode-btn active" data-mode="A3">Mode 3/A</button>
+  </div>
+
+  <label id="entryLabel">Squawk code (digits 0–7 only)</label>
+  <div class="input-row" id="digitRow">
+    <input type="text" class="digit" id="dA" inputmode="numeric" maxlength="1" value="1" data-letter="A">
+    <input type="text" class="digit" id="dB" inputmode="numeric" maxlength="1" value="2" data-letter="B">
+    <input type="text" class="digit" id="dC" inputmode="numeric" maxlength="1" value="0" data-letter="C">
+    <input type="text" class="digit" id="dD" inputmode="numeric" maxlength="1" value="0" data-letter="D">
+  </div>
+  <div class="digit-hints" id="digitHints"><span data-letter="A">A</span><span data-letter="B">B</span><span data-letter="C">C</span><span data-letter="D">D</span></div>
+
+  <div class="readout">
+    <div class="readout-label" id="readoutLabel">Squawk</div>
+    <div class="readout-code" id="code" title="Click to select, then Ctrl+C / Cmd+C to copy">1200</div>
+    <div class="special-note" id="specialNote"></div>
+  </div>
+  <div class="meta" id="meta"></div>
+  <button class="copy" id="copyBtn">Copy code</button>
+
+  <div class="bits-title">
+    <span>Reply pulse train</span>
+    <span class="hint">click a data pulse to toggle</span>
+  </div>
+  <div class="pulse-wrap" id="pulseTrain"></div>
+
+  <div class="bits-title">Digit breakdown</div>
+  <div class="digit-table" id="digitTable"></div>
+
+  <p class="footnote" id="footnote"></p>
+</div>
+<script>
+// Pulse position order — identical physical reply-pulse train structure is
+// shared by Mode 1, Mode 2 and Mode 3/A (they differ in code range / meaning,
+// not in pulse spacing or position). F1/F2 are framing pulses (always
+// present, 20.3us apart). X is a spare position, never transmitted here.
+const PULSE_LABELS = ["F1","C1","A1","C2","A2","C4","A4","X","B1","D1","B2","D2","B4","D4","F2"];
+const PULSE_FIXED = {0:1, 7:0, 14:1}; // index -> forced value (F1, X, F2)
+
+const DIGIT_LETTERS = ["A","B","C","D"];
+const WEIGHTS = [1,2,4]; // bit weights within a digit, e.g. A1,A2,A4
+
+const SPECIAL_CODES = {
+  "7500": "Hijack (unlawful interference)",
+  "7600": "Radio / communications failure",
+  "7700": "Emergency"
+};
+
+const MODES = {
+  M1: {
+    label: "Mode 1",
+    eyebrow: "Mode 1 · Military mission code",
+    sub: "Enter a 4-digit octal mission code (0000–7777) to build the reply pulse train, or click any data pulse to toggle it.",
+    entryLabel: "Mission code",
+    readoutLabel: "Mode 1 code",
+    digits: ["A","B","C","D"],
+    maxByDigit: {A:7, B:7, C:7, D:7},
+    footnote: "Mode 1 carries a 4-digit military mission/exercise code (0000–7777, 4096 codes) and uses the full 12-bit reply — the encoding is identical to Mode 2 and Mode 3/A. The modes are distinguished purely by the interrogator: each uses a different P1–P3 interrogation pulse spacing (Mode 1 ≈ 3&nbsp;µs, Mode 2 ≈ 5&nbsp;µs, Mode 3/A ≈ 8&nbsp;µs), which tells the transponder which \u201cmode\u201d of reply to send — the reply pulse train itself is built the same way in all three."
+  },
+  M2: {
+    label: "Mode 2",
+    eyebrow: "Mode 2 · Military unit code",
+    sub: "Enter a 4-digit octal unit code (0000–7777) to build the reply pulse train, or click any data pulse to toggle it.",
+    entryLabel: "Unit code",
+    readoutLabel: "Mode 2 code",
+    digits: ["A","B","C","D"],
+    maxByDigit: {A:7, B:7, C:7, D:7},
+    footnote: "Mode 2 carries a 4-digit military unit-identification code (0000–7777, 4096 codes) and uses the full 12-bit reply — structurally identical to Mode 3/A, differing only in interrogation pulse spacing and in what the code represents."
+  },
+  A3: {
+    label: "Mode 3/A",
+    eyebrow: "Mode 3/A · ATCRBS (civil identity)",
+    sub: "Enter a 4-digit octal squawk code to build the reply pulse train, or click any data pulse in the train to toggle it — the code decodes live either way.",
+    entryLabel: "Squawk code (digits 0–7 only)",
+    readoutLabel: "Squawk",
+    digits: ["A","B","C","D"],
+    maxByDigit: {A:7, B:7, C:7, D:7},
+    footnote: "Codes <b>7500</b> (hijack), <b>7600</b> (radio/comm failure) and <b>7700</b> (emergency) are reserved discrete codes, flagged in red; <b>1200</b> is the common US VFR code. The A/B/C/D digits are plain binary (A4A2A1, etc.) — unlike Mode C altitude, there's no Gillham re-encoding."
+  }
+};
+
+let currentMode = "A3";
+let bits = {}; // e.g. { A1:0/1, A2:0/1, ..., D4:0/1 } — up to 12 data bits
+
+const digitInputs = {
+  A: document.getElementById('dA'),
+  B: document.getElementById('dB'),
+  C: document.getElementById('dC'),
+  D: document.getElementById('dD')
+};
+const eyebrowEl = document.getElementById('eyebrow');
+const subtextEl = document.getElementById('subtext');
+const entryLabelEl = document.getElementById('entryLabel');
+const readoutLabelEl = document.getElementById('readoutLabel');
+const digitHintsEl = document.getElementById('digitHints');
+const codeEl = document.getElementById('code');
+const metaEl = document.getElementById('meta');
+const specialEl = document.getElementById('specialNote');
+const pulseEl = document.getElementById('pulseTrain');
+const digitTableEl = document.getElementById('digitTable');
+const footnoteEl = document.getElementById('footnote');
+const copyBtn = document.getElementById('copyBtn');
+const modeRow = document.getElementById('modeRow');
+
+function activeBitLabelsForMode(mode){
+  // Which of the 12 data-bit positions actually carry information in this mode.
+  const cfg = MODES[mode];
+  const out = new Set();
+  cfg.digits.forEach(letter => {
+    const maxVal = cfg.maxByDigit[letter];
+    WEIGHTS.forEach(w => { if(w <= maxVal) out.add(letter + w); });
+  });
+  return out;
+}
+
+function digitToBits(letter, value){
+  const out = {};
+  WEIGHTS.forEach(w => { out[letter + w] = (value & w) ? 1 : 0; });
+  return out;
+}
+
+function digitFromBits(letter){
+  let v = 0;
+  WEIGHTS.forEach(w => { if(bits[letter + w]) v += w; });
+  return v;
+}
+
+function setBitsFromDigits(){
+  const cfg = MODES[currentMode];
+  const active = activeBitLabelsForMode(currentMode);
+  bits = {};
+  DIGIT_LETTERS.forEach(letter => {
+    if(cfg.digits.includes(letter)){
+      const raw = digitInputs[letter].value;
+      let v = Math.round(Number(raw));
+      if(!Number.isFinite(v)) v = 0;
+      v = Math.max(0, Math.min(cfg.maxByDigit[letter], v));
+      Object.assign(bits, digitToBits(letter, v));
+    }
+  });
+  // Zero out anything not active in this mode.
+  ["A1","A2","A4","B1","B2","B4","C1","C2","C4","D1","D2","D4"].forEach(l => {
+    if(!active.has(l)) bits[l] = 0;
+  });
+}
+
+function setDigitsFromBits(){
+  const cfg = MODES[currentMode];
+  cfg.digits.forEach(letter => {
+    digitInputs[letter].value = digitFromBits(letter);
+  });
+}
+
+function buildPulseValues(){
+  const active = activeBitLabelsForMode(currentMode);
+  return PULSE_LABELS.map((label, i) => {
+    if(PULSE_FIXED.hasOwnProperty(i)) return PULSE_FIXED[i];
+    if(!active.has(label)) return 0;
+    return bits[label] ? 1 : 0;
+  });
+}
+
+function renderPulseSVG(values){
+  const active = activeBitLabelsForMode(currentMode);
+  const slotW = 24;
+  const pad = 5;
+  const n = values.length;
+  const innerWidth = slotW * n;
+  const totalWidth = innerWidth + pad * 2;
+  const height = 58;
+  const yLow = 48;
+  const yHigh = 20;
+  const inset = slotW * 0.16;
+
+  let path = 'M ' + pad + ' ' + yLow + ' ';
+  let labels = '';
+  let outlines = '';
+  let hits = '';
+
+  for(let i = 0; i < n; i++){
+    const x0 = pad + i * slotW;
+    const x1 = pad + (i + 1) * slotW;
+    if(values[i]){
+      const p0 = x0 + inset, p1 = x1 - inset;
+      path += 'L ' + p0 + ' ' + yLow + ' L ' + p0 + ' ' + yHigh + ' L ' + p1 + ' ' + yHigh + ' L ' + p1 + ' ' + yLow + ' ';
+    }
+    path += 'L ' + x1 + ' ' + yLow + ' ';
+
+    const label = PULSE_LABELS[i];
+    const cx = x0 + slotW / 2;
+    const isFrame = (i === 0 || i === n - 1);
+    const isSpare = label === 'X';
+    const isFixed = PULSE_FIXED.hasOwnProperty(i);
+    const isUnused = !isFixed && !active.has(label);
+    const cls = 'pulse-label' + (isFrame ? ' frame' : '') + (isSpare ? ' spare' : '') + (isUnused ? ' unused' : '');
+    labels += '<text x="' + cx + '" y="12" class="' + cls + '" text-anchor="middle">' + label + '</text>';
+
+    if(isSpare){
+      const p0 = x0 + inset, p1 = x1 - inset;
+      outlines += '<rect x="' + p0 + '" y="' + yHigh + '" width="' + (p1 - p0) + '" height="' + (yLow - yHigh) + '" class="pulse-spare-outline"/>';
+    } else if(isUnused){
+      const p0 = x0 + inset, p1 = x1 - inset;
+      outlines += '<rect x="' + p0 + '" y="' + yHigh + '" width="' + (p1 - p0) + '" height="' + (yLow - yHigh) + '" class="pulse-unused-outline"/>';
+    }
+
+    const nonEditable = isFixed || isUnused;
+    const hitCls = 'pulse-hit' + (nonEditable ? ' fixed' : '');
+    hits += '<rect x="' + x0 + '" y="' + (yHigh - 6) + '" width="' + slotW + '" height="' + (yLow - yHigh + 12) + '" class="' + hitCls + '" data-idx="' + i + '"/>';
+  }
+
+  return '<svg viewBox="0 0 ' + totalWidth + ' ' + height + '" xmlns="http://www.w3.org/2000/svg">'
+    + '<line x1="' + pad + '" y1="' + yLow + '" x2="' + (totalWidth - pad) + '" y2="' + yLow + '" class="pulse-baseline"/>'
+    + '<path d="' + path + '" class="pulse-path"/>'
+    + outlines
+    + labels
+    + hits
+    + '</svg>';
+}
+
+function renderDigitTable(){
+  const cfg = MODES[currentMode];
+  digitTableEl.innerHTML = DIGIT_LETTERS.map(letter => {
+    const isActive = cfg.digits.includes(letter);
+    const hiddenCls = isActive ? '' : ' hidden-digit';
+    if(!isActive) return '<div class="digit-cell' + hiddenCls + '"></div>';
+    const maxVal = cfg.maxByDigit[letter];
+    const v = digitFromBits(letter);
+    const b4 = maxVal >= 4 ? (bits[letter + '4'] ? '1' : '0') : '·';
+    const b2 = maxVal >= 2 ? (bits[letter + '2'] ? '1' : '0') : '·';
+    const b1 = bits[letter + '1'] ? '1' : '0';
+    return '<div class="digit-cell">'
+      + '<div class="letter">' + letter + '</div>'
+      + '<div class="bits">' + b4 + b2 + b1 + '</div>'
+      + '<div class="val">' + v + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+function currentCodeString(){
+  const cfg = MODES[currentMode];
+  return cfg.digits.map(letter => digitFromBits(letter)).join('');
+}
+
+function nextDigitLetter(letter){
+  const cfg = MODES[currentMode];
+  const idx = cfg.digits.indexOf(letter);
+  if(idx === -1 || idx === cfg.digits.length - 1) return null;
+  return cfg.digits[idx + 1];
+}
+
+function prevDigitLetter(letter){
+  const cfg = MODES[currentMode];
+  const idx = cfg.digits.indexOf(letter);
+  if(idx <= 0) return null;
+  return cfg.digits[idx - 1];
+}
+
+function render(fromPulseClick){
+  const cfg = MODES[currentMode];
+  let anyErr = false;
+
+  cfg.digits.forEach(letter => {
+    const el = digitInputs[letter];
+    const raw = el.value;
+    const v = Number(raw);
+    const bad = raw === '' || !Number.isFinite(v) || v < 0 || v > cfg.maxByDigit[letter] || Math.round(v) !== v;
+    el.classList.toggle('err', bad);
+    if(bad) anyErr = true;
+  });
+
+  if(!fromPulseClick){
+    setBitsFromDigits();
+  } else {
+    setDigitsFromBits();
+    cfg.digits.forEach(letter => digitInputs[letter].classList.remove('err'));
+    anyErr = false;
+  }
+
+  const code = currentCodeString();
+  codeEl.textContent = code;
+
+  const special = (currentMode === 'A3') ? SPECIAL_CODES[code] : null;
+  codeEl.classList.toggle('special', !!special);
+  specialEl.textContent = special ? ('Reserved code — ' + special) : '';
+
+  if(anyErr){
+    metaEl.textContent = 'Each digit must be a whole number from 0 to ' + cfg.maxByDigit[cfg.digits[cfg.digits.length - 1]] + ' (or the digit\u2019s own max).';
+  } else {
+    const activeDataLabels = PULSE_LABELS.filter((l,i) => !PULSE_FIXED.hasOwnProperty(i) && activeBitLabelsForMode(currentMode).has(l));
+    metaEl.innerHTML = 'Bits: <b>' + activeDataLabels.map(l => bits[l] ? '1' : '0').join('') + '</b> (' + activeDataLabels.join(' ') + ')';
+  }
+
+  copyBtn.disabled = anyErr;
+
+  pulseEl.innerHTML = renderPulseSVG(buildPulseValues());
+  renderDigitTable();
+}
+
+function applyModeUI(){
+  const cfg = MODES[currentMode];
+  eyebrowEl.textContent = cfg.eyebrow;
+  subtextEl.textContent = cfg.sub;
+  entryLabelEl.textContent = cfg.entryLabel;
+  readoutLabelEl.textContent = cfg.readoutLabel;
+  footnoteEl.innerHTML = cfg.footnote;
+
+  DIGIT_LETTERS.forEach(letter => {
+    const isActive = cfg.digits.includes(letter);
+    digitInputs[letter].classList.toggle('hidden-digit', !isActive);
+    const hint = digitHintsEl.querySelector('[data-letter="' + letter + '"]');
+    if(hint) hint.classList.toggle('hidden-digit', !isActive);
+  });
+
+  Array.from(modeRow.querySelectorAll('.mode-btn')).forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-mode') === currentMode);
+  });
+}
+
+function switchMode(mode){
+  if(mode === currentMode) return;
+  currentMode = mode;
+  applyModeUI();
+  render(false);
+}
+
+modeRow.addEventListener('click', (e) => {
+  const btn = e.target.closest('.mode-btn');
+  if(!btn) return;
+  switchMode(btn.getAttribute('data-mode'));
+});
+
+DIGIT_LETTERS.forEach(letter => {
+  const el = digitInputs[letter];
+
+  el.addEventListener('focus', () => el.select());
+
+  el.addEventListener('input', () => {
+    // Keep only a single digit character.
+    let v = el.value.replace(/[^0-9]/g, '').slice(-1);
+    el.value = v;
+    render(false);
+    if(v !== ''){
+      const next = nextDigitLetter(letter);
+      if(next) digitInputs[next].focus();
+    }
+  });
+
+  el.addEventListener('keydown', (e) => {
+    if(e.key === 'Backspace' && el.value === ''){
+      const prev = prevDigitLetter(letter);
+      if(prev){
+        e.preventDefault();
+        digitInputs[prev].focus();
+      }
+    } else if(e.key === 'ArrowLeft'){
+      const prev = prevDigitLetter(letter);
+      if(prev){ e.preventDefault(); digitInputs[prev].focus(); }
+    } else if(e.key === 'ArrowRight'){
+      const next = nextDigitLetter(letter);
+      if(next){ e.preventDefault(); digitInputs[next].focus(); }
+    }
+  });
+});
+
+pulseEl.addEventListener('click', (e) => {
+  const hit = e.target.closest('[data-idx]');
+  if(!hit) return;
+  const idx = Number(hit.getAttribute('data-idx'));
+  if(PULSE_FIXED.hasOwnProperty(idx)) return;
+  const label = PULSE_LABELS[idx];
+  if(!activeBitLabelsForMode(currentMode).has(label)) return;
+  bits[label] = bits[label] ? 0 : 1;
+  render(true);
+});
+
+// Some hosting contexts (e.g. SharePoint's sandboxed file viewer) block the
+// modern Clipboard API even though the rest of the page's JS runs fine.
+// Try it first, then fall back to the legacy execCommand technique, then
+// fall back to just selecting the text so the user can press Ctrl+C.
+async function copyText(text){
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    try{
+      await navigator.clipboard.writeText(text);
+      return true;
+    }catch(e){ /* fall through */ }
+  }
+  try{
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.top = '-9999px';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    if(ok) return true;
+  }catch(e){ /* fall through */ }
+  return false;
+}
+
+function selectCodeText(){
+  const range = document.createRange();
+  range.selectNodeContents(codeEl);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+copyBtn.addEventListener('click', async () => {
+  if(copyBtn.disabled) return;
+  const original = copyBtn.textContent;
+  const success = await copyText(currentCodeString());
+  if(success){
+    copyBtn.textContent = 'Copied';
+    setTimeout(() => { copyBtn.textContent = original; }, 1200);
+  }else{
+    selectCodeText();
+    copyBtn.textContent = 'Copy blocked — code selected, press Ctrl+C';
+    setTimeout(() => { copyBtn.textContent = original; }, 2500);
+  }
+});
+
+codeEl.addEventListener('click', () => {
+  if(!copyBtn.disabled) selectCodeText();
+});
+
+document.getElementById('backBtn').addEventListener('click', () => {
+  // Most embeds (an iframe or a link from another page) have real history to
+  // go back to. If this page was opened with nothing before it (e.g. a
+  // brand-new tab), history.back() is a no-op, so fall back to closing the
+  // tab for cases where that's possible.
+  if(window.history.length > 1){
+    window.history.back();
+  } else {
+    window.close();
+  }
+});
+
+applyModeUI();
+render(false);
+</script>
+</body>
+</html>
